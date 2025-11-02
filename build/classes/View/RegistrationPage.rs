@@ -1,1 +1,10 @@
+view.RegistrationPage$1
+view.RegistrationPage$2
+view.RegistrationPage$7
 view.RegistrationPage
+view.RegistrationPage$8
+view.RegistrationPage$3
+view.GradientPanel
+view.RegistrationPage$4
+view.RegistrationPage$5
+view.RegistrationPage$6

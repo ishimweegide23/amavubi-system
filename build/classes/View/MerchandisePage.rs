@@ -1,0 +1,7 @@
+view.MerchandisePage
+GradientPanel
+view.MerchandisePage$MerchandiseCardRenderer
+view.MerchandisePage$GradientPanel
+view.MerchandisePage$2
+MerchandiseCardRenderer
+view.MerchandisePage$1

@@ -4,7 +4,7 @@
  * and open the template in the editor.
  */
 package view;
-
+import Service.OTPService;
 import Dao.FanDAO;
 import Model.Fan;
 import Dao.DatabaseConnection;
@@ -12,12 +12,16 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
 import view.FanDashboard; 
+import controller.FanController;
+import Service.FanService;
 
 /**
  *
  * @author Hey
  */
 public class LoginPage extends javax.swing.JFrame {
+
+    private final FanController fanController;
     
     
 
@@ -26,10 +30,10 @@ public class LoginPage extends javax.swing.JFrame {
      * Creates new form LoginPage
      */
     public LoginPage() {
+        this.fanController = new FanController(new FanService(), new FanDAO());
         initComponents();
         setLocationRelativeTo(null);
     }
-
     /**
      * This method is called from within the constructor to initialize the form.
      * WARNING: Do NOT modify this code. The content of this method is always
@@ -209,25 +213,40 @@ public class LoginPage extends javax.swing.JFrame {
 
     private void loginButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_loginButtonActionPerformed
         // TODO add your handling code here:
+     String email = emailField.getText().trim();
+        String password = new String(Passwordfield.getPassword()).trim();
         
-      String email = emailField.getText().trim();
-String password = new String(Passwordfield.getPassword()).trim();
-
-if (email.isEmpty() || password.isEmpty()) {
-    JOptionPane.showMessageDialog(this, "Please enter both email and password.", "Warning", JOptionPane.WARNING_MESSAGE);
-    return;
-}
-
-FanDAO fanDAO = new FanDAO();
-Fan fan = fanDAO.authenticateFan(email, password);
-
-if (fan != null) {
-    JOptionPane.showMessageDialog(this, "Welcome " + fan.getName() + "!", "Login Successful", JOptionPane.INFORMATION_MESSAGE);
-    new FanDashboard(fan).setVisible(true);
-    this.dispose();
-} else {
-    JOptionPane.showMessageDialog(this, "Invalid email or password!", "Login Failed", JOptionPane.ERROR_MESSAGE);
-}
+        // Input validation
+        if (email.isEmpty() || password.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Email and password are required!", 
+                "Validation Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        
+        if (!email.matches("^[\\w-\\.]+@([\\w-]+\\.)+[\\w-]{2,4}$")) {
+            JOptionPane.showMessageDialog(this, "Invalid email format!", 
+                "Validation Error", JOptionPane.ERROR_MESSAGE);
+            emailField.setBorder(BorderFactory.createLineBorder(Color.RED));
+            return;
+        }
+        
+        // Authenticate user
+        Fan fan = fanController.authenticateFan(email, password);
+        
+        if (fan != null) {
+            // Successful login
+            JOptionPane.showMessageDialog(this, "Welcome " + fan.getName() + "!", 
+                "Login Successful", JOptionPane.INFORMATION_MESSAGE);
+            
+            // Always redirect to FanDashboard, which will handle role differences
+            new FanDashboard(fan).setVisible(true);
+            this.dispose();
+        } else {
+            // Failed login
+            JOptionPane.showMessageDialog(this, "Invalid email or password", 
+                "Login Failed", JOptionPane.ERROR_MESSAGE);
+            Passwordfield.setBorder(BorderFactory.createLineBorder(Color.RED));
+        }
 
     }//GEN-LAST:event_loginButtonActionPerformed
 
@@ -246,34 +265,19 @@ if (fan != null) {
      * @param args the command line arguments
      */
     public static void main(String args[]) {
-        /* Set the Nimbus look and feel */
-        //<editor-fold defaultstate="collapsed" desc=" Look and feel setting code (optional) ">
-        /* If Nimbus (introduced in Java SE 6) is not available, stay with the default look and feel.
-         * For details see http://download.oracle.com/javase/tutorial/uiswing/lookandfeel/plaf.html 
-         */
-        try {
+      try {
             for (javax.swing.UIManager.LookAndFeelInfo info : javax.swing.UIManager.getInstalledLookAndFeels()) {
                 if ("Nimbus".equals(info.getName())) {
                     javax.swing.UIManager.setLookAndFeel(info.getClassName());
                     break;
                 }
             }
-        } catch (ClassNotFoundException ex) {
-            java.util.logging.Logger.getLogger(LoginPage.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (InstantiationException ex) {
-            java.util.logging.Logger.getLogger(LoginPage.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (IllegalAccessException ex) {
-            java.util.logging.Logger.getLogger(LoginPage.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (javax.swing.UnsupportedLookAndFeelException ex) {
+        } catch (ClassNotFoundException | InstantiationException | IllegalAccessException | javax.swing.UnsupportedLookAndFeelException ex) {
             java.util.logging.Logger.getLogger(LoginPage.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
         }
-        //</editor-fold>
 
-        /* Create and display the form */
-        java.awt.EventQueue.invokeLater(new Runnable() {
-            public void run() {
-                new LoginPage().setVisible(true);
-            }
+        java.awt.EventQueue.invokeLater(() -> {
+            new LoginPage().setVisible(true);
         });
     }
 
@@ -291,4 +295,6 @@ if (fan != null) {
     private javax.swing.JButton loginButton;
     private javax.swing.JPanel mainpanel;
     // End of variables declaration//GEN-END:variables
+
+  
 }

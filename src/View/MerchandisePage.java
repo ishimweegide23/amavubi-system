@@ -1,41 +1,32 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package view;
 
 import Dao.MerchandiseDAO;
 import Dao.TransactionDAO;
 import Model.Fan;
 import Model.Merchandise;
-import java.awt.Color;
-import java.awt.Component;
-import java.awt.Font;
-import java.awt.GradientPaint;
-import java.awt.Graphics;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
+import controller.MerchandiseController;
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.net.URL;
 import java.util.List;
-import javax.swing.BorderFactory;
-import javax.swing.DefaultListCellRenderer;
-import javax.swing.DefaultListModel;
-import javax.swing.JList;
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
+import javax.imageio.ImageIO;
 
-/**
- *
- * @author Hey
- */
-public class MerchandisePage extends javax.swing.JFrame {
-   
-     private Fan fan;
-    private DefaultListModel<String> listModel;
+public class MerchandisePage extends JFrame {
+    private JList<Merchandise> merchandiseList;
+    private DefaultListModel<Merchandise> listModel;
+    private Fan fan;
+    private JSpinner quantitySpinner;
+    private JComboBox<String> sizeComboBox;
+    private MerchandiseController merchandiseController;
 
-   
-    
-   class GradientPanel extends JPanel {
+    public void showErrorMessage(String message) {
+        JOptionPane.showMessageDialog(this, message, "Error", JOptionPane.ERROR_MESSAGE);
+    }
+
+    class GradientPanel extends JPanel {
         @Override
         protected void paintComponent(Graphics g) {
             super.paintComponent(g);
@@ -48,371 +39,333 @@ public class MerchandisePage extends javax.swing.JFrame {
             g2d.fillRect(0, 0, getWidth(), getHeight());
         }
     }
-    /**
-     * Creates new form MerchandisePage
-     */
-   public MerchandisePage(Fan fan) {
+
+    public MerchandisePage(Fan fan) {
         this.fan = fan;
         initComponents();
-        setupListModel();
-        addListSelectionListener();
-        setLocationRelativeTo(null);
     }
 
-    private void setupListModel() {
+    private void initComponents() {
+        setTitle("FanHub - Merchandise Store");
+        setSize(800, 650); // Increased size for better card display
+        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        setLocationRelativeTo(null);
+        setResizable(false);
+
+        // Main panel with gradient background
+        GradientPanel mainPanel = new GradientPanel();
+        mainPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+        mainPanel.setLayout(new BorderLayout());
+        setContentPane(mainPanel);
+
+        // Header panel
+        JLabel titleLabel = new JLabel("AMAVUBI MERCHANDISE STORE");
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 24));
+        titleLabel.setForeground(new Color(255, 209, 0)); // Rwanda yellow
+        titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        mainPanel.add(titleLabel, BorderLayout.NORTH);
+
+        // Merchandise list panel
         listModel = new DefaultListModel<>();
-        merchandiseList.setModel(listModel);
-        merchandiseList.setCellRenderer(new MerchandiseListRenderer());
-        loadMerchandiseData();
-    }
-   private void addListSelectionListener() {
+        merchandiseList = new JList<>(listModel);
+        merchandiseList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        merchandiseList.setCellRenderer(new MerchandiseCardRenderer());
+        merchandiseList.setLayoutOrientation(JList.HORIZONTAL_WRAP);
+        merchandiseList.setVisibleRowCount(-1);
+        merchandiseList.setFixedCellWidth(350);
+        merchandiseList.setFixedCellHeight(150);
+
+        JScrollPane scrollPane = new JScrollPane(merchandiseList);
+        scrollPane.setBorder(BorderFactory.createEmptyBorder());
+        scrollPane.setOpaque(false);
+        scrollPane.getViewport().setOpaque(false);
+        
+        JPanel listPanel = new JPanel(new BorderLayout()) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                Graphics2D g2d = (Graphics2D) g;
+                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2d.setColor(new Color(255, 255, 255, 220));
+                g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 15, 15);
+                g2d.setColor(new Color(0, 0, 0, 30));
+                g2d.drawRoundRect(0, 0, getWidth()-1, getHeight()-1, 15, 15);
+            }
+        };
+        listPanel.setOpaque(false);
+        listPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        listPanel.add(scrollPane, BorderLayout.CENTER);
+        mainPanel.add(listPanel, BorderLayout.CENTER);
+
+        // Bottom panel with controls
+        JPanel bottomPanel = new JPanel(new BorderLayout());
+        bottomPanel.setOpaque(false);
+        bottomPanel.setBorder(BorderFactory.createEmptyBorder(10, 0, 0, 0));
+
+        // Selection controls panel
+        JPanel selectionPanel = new JPanel(new GridLayout(2, 1, 5, 5));
+        selectionPanel.setOpaque(false);
+
+        // Quantity panel
+        JPanel quantityPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        quantityPanel.setOpaque(false);
+        
+        JLabel quantityLabel = new JLabel("Quantity:");
+        quantityLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        quantityLabel.setForeground(Color.WHITE);
+        quantityPanel.add(quantityLabel);
+
+        quantitySpinner = new JSpinner(new SpinnerNumberModel(1, 1, 10, 1));
+        quantitySpinner.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        quantityPanel.add(quantitySpinner);
+
+        // Size panel
+        JPanel sizePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        sizePanel.setOpaque(false);
+        
+        JLabel sizeLabel = new JLabel("Size:");
+        sizeLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        sizeLabel.setForeground(Color.WHITE);
+        sizePanel.add(sizeLabel);
+
+        sizeComboBox = new JComboBox<>();
+        sizeComboBox.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        sizeComboBox.setEnabled(false); // Disabled until item is selected
+        sizePanel.add(sizeComboBox);
+
+        selectionPanel.add(quantityPanel);
+        selectionPanel.add(sizePanel);
+        bottomPanel.add(selectionPanel, BorderLayout.WEST);
+
+        // Buttons panel
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        buttonPanel.setOpaque(false);
+
+        JButton backButton = new JButton("BACK TO DASHBOARD");
+        styleButton(backButton, new Dimension(180, 35));
+        backButton.addActionListener(e -> {
+            new FanDashboard(fan).setVisible(true);
+            dispose();
+        });
+
+        JButton buyButton = new JButton("PURCHASE");
+        styleButton(buyButton, new Dimension(120, 35));
+        buyButton.addActionListener(e -> purchaseItem());
+
+        buttonPanel.add(backButton);
+        buttonPanel.add(buyButton);
+        bottomPanel.add(buttonPanel, BorderLayout.EAST);
+
+        mainPanel.add(bottomPanel, BorderLayout.SOUTH);
+
+        // Add selection listener for size combo box updates
         merchandiseList.addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting() && merchandiseList.getSelectedValue() != null) {
                 updateSizeComboBox(merchandiseList.getSelectedValue());
             }
         });
-    }
-  private void loadMerchandiseData() {
-        MerchandiseDAO merchandiseDAO = new MerchandiseDAO();
-        List<Merchandise> merchandiseListData = merchandiseDAO.getMerchandiseList();
 
+        loadMerchandiseData();
+    }
+
+    private void styleButton(JButton button, Dimension size) {
+        button.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        button.setForeground(Color.WHITE);
+        button.setBackground(new Color(0, 75, 14)); // Dark green
+        button.setFocusPainted(false);
+        button.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(255, 209, 0), 2),
+            BorderFactory.createEmptyBorder(5, 15, 5, 15)
+        ));
+        button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        button.setPreferredSize(size);
+        
+        button.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                button.setBackground(new Color(0, 55, 10));
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                button.setBackground(new Color(0, 75, 14));
+            }
+        });
+    }
+
+public void loadMerchandiseData() {
+        merchandiseController = new MerchandiseController();
+        merchandiseController.setView(this); // Connect the controller to this view
+        
+        List<Merchandise> merchandiseListData = merchandiseController.getAllMerchandise();
+        
         listModel.clear();
         for (Merchandise merchandise : merchandiseListData) {
-            String text = String.format("%s - %s - RWF %,.0f (Stock: %d)", 
-                merchandise.getName(),
-                merchandise.getCategory(), 
-                merchandise.getPrice(), 
-                merchandise.getStockQuantity());
-            
-            if (merchandise.getSize() != null && !merchandise.getSize().equalsIgnoreCase("NULL")) {
-                text += " [Sizes: " + merchandise.getSize() + "]";
-            }
-            listModel.addElement(text);
+            listModel.addElement(merchandise);
         }
     }
 
-
-private void updateSizeComboBox(String selectedItem) {
+      private void updateSizeComboBox(Merchandise selectedItem) {
         sizeComboBox.removeAllItems();
         sizeComboBox.setEnabled(true);
         
-        int sizesStart = selectedItem.indexOf("[Sizes: ");
-        if (sizesStart != -1) {
-            int sizesEnd = selectedItem.indexOf("]", sizesStart);
-            String sizesStr = selectedItem.substring(sizesStart + 8, sizesEnd);
-            String[] sizes = sizesStr.split("\\s*,\\s*");
-            
-            for (String size : sizes) {
-                if (!size.trim().isEmpty()) {
-                    sizeComboBox.addItem(size.trim());
-                }
-            }
-        } else {
-            sizeComboBox.addItem("One Size");
+        List<String> sizes = merchandiseController.getAvailableSizes(selectedItem.getItemId());
+        for (String size : sizes) {
+            sizeComboBox.addItem(size);
+        }
+        
+        if (sizes.size() == 1 && sizes.get(0).equals("One Size")) {
             sizeComboBox.setEnabled(false);
         }
     }
-  private class MerchandiseListRenderer extends DefaultListCellRenderer {
-    private final Color selectionColor = new Color(0, 102, 0); // Dark green
-    private final Color evenRowColor = new Color(240, 240, 240); // Light gray
-    private final Color oddRowColor = Color.WHITE;
-    private final Color borderColor = new Color(200, 200, 200); // Light gray border
-    
-    @Override
-    public Component getListCellRendererComponent(
-            JList<?> list, Object value, int index, 
-            boolean isSelected, boolean cellHasFocus) {
-        
-        super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
-        
-        // Set fonts and alignment
-        setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createMatteBorder(0, 0, 1, 0, borderColor),
-            BorderFactory.createEmptyBorder(10, 15, 10, 15)
-        ));
-        
-        // Alternate row colors
-        if (!isSelected) {
-            setBackground(index % 2 == 0 ? evenRowColor : oddRowColor);
+
+     private void purchaseItem() {
+        Merchandise selectedItem = merchandiseList.getSelectedValue();
+        if (selectedItem == null) {
+            JOptionPane.showMessageDialog(this, 
+                "Please select an item to purchase", 
+                "Selection Required", 
+                JOptionPane.WARNING_MESSAGE);
+            return;
         }
-        
-        // Selection styling
-        if (isSelected) {
-            setBackground(selectionColor);
-            setForeground(Color.WHITE);
-        } else {
-            setForeground(Color.BLACK);
-        }
-        
-        return this;
-    }
-}
 
-
-    /**
-     * This method is called from within the constructor to initialize the form.
-     * WARNING: Do NOT modify this code. The content of this method is always
-     * regenerated by the Form Editor.
-     */
-    @SuppressWarnings("unchecked")
-    // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
-    private void initComponents() {
-
-        mainpanel = new GradientPanel();
-        jLabel1 = new javax.swing.JLabel();
-        jScrollPane1 = new javax.swing.JScrollPane();
-        merchandiseList = new javax.swing.JList<>();
-        jLabel2 = new javax.swing.JLabel();
-        quantitySpinner = new javax.swing.JSpinner();
-        jLabel3 = new javax.swing.JLabel();
-        sizeComboBox = new javax.swing.JComboBox<>();
-        buyButton = new javax.swing.JButton();
-        backButton = new javax.swing.JButton();
-        jLabel4 = new javax.swing.JLabel();
-
-        setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
-        setTitle("FanHub - Merchandise Store");
-        setResizable(false);
-        setSize(new java.awt.Dimension(650, 550));
-
-        mainpanel.setBackground(new java.awt.Color(255, 204, 204));
-        mainpanel.setBorder(javax.swing.BorderFactory.createEmptyBorder(20, 20, 20, 20));
-        mainpanel.setPreferredSize(new java.awt.Dimension(650, 550));
-
-        jLabel1.setFont(new java.awt.Font("Segoe UI", 1, 26)); // NOI18N
-        jLabel1.setForeground(new java.awt.Color(255, 208, 0));
-        jLabel1.setText("AMAVUBI MERCHANDISE STORE");
-
-        jScrollPane1.setBorder(javax.swing.BorderFactory.createEtchedBorder());
-
-        merchandiseList.setBorder(new javax.swing.border.SoftBevelBorder(javax.swing.border.BevelBorder.RAISED, java.awt.Color.darkGray, java.awt.Color.darkGray, java.awt.Color.black, java.awt.Color.black));
-        merchandiseList.setFont(new java.awt.Font("Segoe UI", 0, 15)); // NOI18N
-        merchandiseList.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
-        merchandiseList.setPreferredSize(new java.awt.Dimension(600, 450));
-        jScrollPane1.setViewportView(merchandiseList);
-
-        jLabel2.setFont(new java.awt.Font("Segoe UI", 1, 14)); // NOI18N
-        jLabel2.setForeground(new java.awt.Color(255, 255, 255));
-        jLabel2.setText("Quantity");
-
-        quantitySpinner.setModel(new javax.swing.SpinnerNumberModel(1, 1, 10, 1));
-
-        jLabel3.setFont(new java.awt.Font("Segoe UI", 1, 15)); // NOI18N
-        jLabel3.setForeground(new java.awt.Color(255, 255, 255));
-        jLabel3.setText("Size");
-
-        sizeComboBox.setFont(new java.awt.Font("Segoe UI", 0, 14)); // NOI18N
-        sizeComboBox.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "s", "Item 2", "Item 3", "Item 4" }));
-        sizeComboBox.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                sizeComboBoxActionPerformed(evt);
-            }
-        });
-
-        buyButton.setBackground(new java.awt.Color(0, 102, 0));
-        buyButton.setFont(new java.awt.Font("Segoe UI", 1, 14)); // NOI18N
-        buyButton.setForeground(new java.awt.Color(255, 255, 255));
-        buyButton.setText("PURCHASE");
-        buyButton.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
-        buyButton.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                buyButtonActionPerformed(evt);
-            }
-        });
-
-        backButton.setBackground(new java.awt.Color(255, 255, 0));
-        backButton.setFont(new java.awt.Font("Segoe UI", 1, 12)); // NOI18N
-        backButton.setForeground(new java.awt.Color(255, 255, 0));
-        backButton.setText("BACK TO DASHBOARD");
-        backButton.setBorderPainted(false);
-        backButton.setContentAreaFilled(false);
-        backButton.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
-        backButton.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                backButtonActionPerformed(evt);
-            }
-        });
-
-        jLabel4.setFont(new java.awt.Font("Segoe UI", 0, 12)); // NOI18N
-        jLabel4.setForeground(new java.awt.Color(204, 204, 255));
-        jLabel4.setText("© 2025 Amavubi FanHub - Official Fan Platform");
-
-        javax.swing.GroupLayout mainpanelLayout = new javax.swing.GroupLayout(mainpanel);
-        mainpanel.setLayout(mainpanelLayout);
-        mainpanelLayout.setHorizontalGroup(
-            mainpanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(mainpanelLayout.createSequentialGroup()
-                .addGap(86, 86, 86)
-                .addComponent(jLabel1)
-                .addContainerGap(158, Short.MAX_VALUE))
-            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, mainpanelLayout.createSequentialGroup()
-                .addContainerGap()
-                .addGroup(mainpanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(jScrollPane1, javax.swing.GroupLayout.Alignment.TRAILING)
-                    .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, mainpanelLayout.createSequentialGroup()
-                        .addGroup(mainpanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addComponent(jLabel2)
-                            .addComponent(jLabel3, javax.swing.GroupLayout.PREFERRED_SIZE, 39, javax.swing.GroupLayout.PREFERRED_SIZE))
-                        .addGroup(mainpanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addGroup(mainpanelLayout.createSequentialGroup()
-                                .addGap(10, 10, 10)
-                                .addComponent(quantitySpinner, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                            .addGroup(mainpanelLayout.createSequentialGroup()
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(sizeComboBox, javax.swing.GroupLayout.PREFERRED_SIZE, 47, javax.swing.GroupLayout.PREFERRED_SIZE)))
-                        .addGroup(mainpanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addGroup(mainpanelLayout.createSequentialGroup()
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                                .addComponent(buyButton, javax.swing.GroupLayout.PREFERRED_SIZE, 135, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                .addGap(49, 49, 49)
-                                .addComponent(backButton)
-                                .addGap(19, 19, 19))
-                            .addGroup(mainpanelLayout.createSequentialGroup()
-                                .addGap(67, 67, 67)
-                                .addComponent(jLabel4)
-                                .addGap(0, 0, Short.MAX_VALUE)))))
-                .addContainerGap())
-        );
-        mainpanelLayout.setVerticalGroup(
-            mainpanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(mainpanelLayout.createSequentialGroup()
-                .addComponent(jLabel1, javax.swing.GroupLayout.PREFERRED_SIZE, 32, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 380, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGroup(mainpanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addGroup(mainpanelLayout.createSequentialGroup()
-                        .addGap(28, 28, 28)
-                        .addGroup(mainpanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addComponent(buyButton)
-                            .addComponent(backButton))
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                        .addComponent(jLabel4, javax.swing.GroupLayout.PREFERRED_SIZE, 25, javax.swing.GroupLayout.PREFERRED_SIZE))
-                    .addGroup(mainpanelLayout.createSequentialGroup()
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addGroup(mainpanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                            .addComponent(jLabel2, javax.swing.GroupLayout.PREFERRED_SIZE, 33, javax.swing.GroupLayout.PREFERRED_SIZE)
-                            .addComponent(quantitySpinner, javax.swing.GroupLayout.PREFERRED_SIZE, 33, javax.swing.GroupLayout.PREFERRED_SIZE))
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addGroup(mainpanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                            .addComponent(jLabel3)
-                            .addComponent(sizeComboBox, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))))
-                .addContainerGap(17, Short.MAX_VALUE))
-        );
-
-        getContentPane().add(mainpanel, java.awt.BorderLayout.CENTER);
-
-        pack();
-    }// </editor-fold>//GEN-END:initComponents
-
-    private void buyButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_buyButtonActionPerformed
-        // TODO add your handling code here:
-        // Validate item selection
-    String selectedItem = merchandiseList.getSelectedValue();
-    if (selectedItem == null) {
-        JOptionPane.showMessageDialog(this, 
-            "Please select an item to purchase", 
-            "Selection Required", 
-            JOptionPane.WARNING_MESSAGE);
-        return;
-    }
-
-    // Validate quantity
-    int quantity = (int) quantitySpinner.getValue();
-    if (quantity < 1) {
-        JOptionPane.showMessageDialog(this, 
-            "Quantity must be at least 1", 
-            "Invalid Quantity", 
-            JOptionPane.WARNING_MESSAGE);
-        return;
-    }
-
-    // Validate size if the product has sizes
-    String size = (String) sizeComboBox.getSelectedItem();
-    if (selectedItem.contains("[Sizes:") && (size == null || size.trim().isEmpty())) {
-        JOptionPane.showMessageDialog(this, 
-            "Please select a size for this product", 
-            "Size Required", 
-            JOptionPane.WARNING_MESSAGE);
-        return;
-    }
-
-    try {
-        String[] itemParts = selectedItem.split(" - ");
-        String itemName = itemParts[0];
-        double itemPrice = Double.parseDouble(itemParts[2].split(" ")[1].replace(",", ""));
-        double totalPrice = itemPrice * quantity;
-
-        MerchandiseDAO merchandiseDAO = new MerchandiseDAO();
-        Merchandise merchandise = merchandiseDAO.getMerchandiseByName(itemName);
-
-        if (merchandise != null && merchandise.getStockQuantity() >= quantity) {
-            boolean success = new TransactionDAO().insertMerchandisePurchase(
-                fan.getFanId(), merchandise.getItemId(), quantity, totalPrice, size);
+        try {
+            int quantity = (int) quantitySpinner.getValue();
+            String size = (String) sizeComboBox.getSelectedItem();
             
-            if (success) {
-                merchandiseDAO.updateStockQuantity(merchandise.getItemId(), 
-                    merchandise.getStockQuantity() - quantity);
+            boolean success = merchandiseController.purchaseMerchandise(
+                fan, selectedItem, quantity, size);
                 
+            if (success) {
                 String sizeInfo = size.equals("One Size") ? "" : "\nSize: " + size;
                 String message = String.format(
                     "🎉 Purchase Confirmation for %s\n\n" +
                     "Item: %d × %s%s\n" +
                     "Total: RWF %,.0f\n\n" +
                     "Thank you for supporting Amavubi!",
-                    fan.getName(), quantity, itemName, sizeInfo, totalPrice);
+                    fan.getName(), quantity, selectedItem.getName(), sizeInfo, 
+                    selectedItem.getPrice() * quantity);
                 
                 JOptionPane.showMessageDialog(this,
                     message,
                     "Purchase Successful", 
                     JOptionPane.INFORMATION_MESSAGE);
-                loadMerchandiseData();
-            } else {
-                JOptionPane.showMessageDialog(this, 
-                    "Purchase failed. Please try again.", 
-                    "Error", 
-                    JOptionPane.ERROR_MESSAGE);
+                loadMerchandiseData(); // Refresh the list
             }
-        } else {
+        } catch (Exception e) {
+            e.printStackTrace();
             JOptionPane.showMessageDialog(this, 
-                "Not enough stock available", 
-                "Insufficient Stock", 
-                JOptionPane.WARNING_MESSAGE);
+                "An error occurred during purchase: " + e.getMessage(), 
+                "Error", 
+                JOptionPane.ERROR_MESSAGE);
         }
-    } catch (Exception e) {
-        JOptionPane.showMessageDialog(this, 
-            "An error occurred during purchase: " + e.getMessage(), 
-            "Error", 
-            JOptionPane.ERROR_MESSAGE);
     }
-    
-    }//GEN-LAST:event_buyButtonActionPerformed
 
-    private void backButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_backButtonActionPerformed
-        // TODO add your handling code here:
-        new FanDashboard(fan).setVisible(true);
-    dispose();
-    }//GEN-LAST:event_backButtonActionPerformed
+   private class MerchandiseCardRenderer implements ListCellRenderer<Merchandise> {
+    private final Color selectionColor = new Color(0, 102, 0, 50);
+    private final Color cardColor = new Color(255, 255, 255, 220);
+    private final int imageSize = 100;
 
-    private void sizeComboBoxActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_sizeComboBoxActionPerformed
-        // TODO add your handling code here:
-    }//GEN-LAST:event_sizeComboBoxActionPerformed
+    @Override
+    public Component getListCellRendererComponent(JList<? extends Merchandise> list, Merchandise item, 
+                                                int index, boolean isSelected, boolean cellHasFocus) {
+        
+        // Main card panel
+        JPanel card = new JPanel(new BorderLayout(10, 5));
+        card.setOpaque(false);
+        card.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
-    /**
-     * @param args the command line arguments
-     */
-    
-    // Variables declaration - do not modify//GEN-BEGIN:variables
-    private javax.swing.JButton backButton;
-    private javax.swing.JButton buyButton;
-    private javax.swing.JLabel jLabel1;
-    private javax.swing.JLabel jLabel2;
-    private javax.swing.JLabel jLabel3;
-    private javax.swing.JLabel jLabel4;
-    private javax.swing.JScrollPane jScrollPane1;
-    private javax.swing.JPanel mainpanel;
-    private javax.swing.JList<String> merchandiseList;
-    private javax.swing.JSpinner quantitySpinner;
-    private javax.swing.JComboBox<String> sizeComboBox;
-    // End of variables declaration//GEN-END:variables
+        // Product image
+        JLabel imageLabel = new JLabel();
+        imageLabel.setHorizontalAlignment(JLabel.CENTER);
+        
+        // Try loading image with multiple extensions
+        ImageIcon productIcon = loadProductIcon(item.getItemId());
+        imageLabel.setIcon(productIcon);
+
+        // Text content
+        JPanel textPanel = new JPanel();
+        textPanel.setOpaque(false);
+        textPanel.setLayout(new BoxLayout(textPanel, BoxLayout.Y_AXIS));
+        
+        // Category label with different color
+        JLabel categoryLabel = new JLabel(item.getCategory());
+        categoryLabel.setFont(new Font("Segoe UI", Font.BOLD | Font.ITALIC, 12));
+        categoryLabel.setForeground(new Color(0, 75, 150)); // Blue color for category
+        
+        JLabel nameLabel = new JLabel(item.getName());
+        nameLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        nameLabel.setForeground(new Color(50, 50, 50));
+
+        JLabel priceLabel = new JLabel(String.format("RWF %,.0f", item.getPrice()));
+        priceLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        priceLabel.setForeground(new Color(0, 102, 0));
+
+        JLabel stockLabel = new JLabel("Stock: " + item.getStockQuantity());
+        stockLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        stockLabel.setForeground(new Color(100, 100, 100));
+
+        // Add components to text panel with proper spacing
+        textPanel.add(categoryLabel);
+        textPanel.add(Box.createRigidArea(new Dimension(0, 3))); // Small space after category
+        textPanel.add(nameLabel);
+        textPanel.add(Box.createRigidArea(new Dimension(0, 5)));
+        textPanel.add(priceLabel);
+        textPanel.add(Box.createRigidArea(new Dimension(0, 5)));
+        textPanel.add(stockLabel);
+
+        // Add components to card
+        card.add(imageLabel, BorderLayout.WEST);
+        card.add(textPanel, BorderLayout.CENTER);
+
+        // Selection styling
+        if (isSelected) {
+            card.setBackground(selectionColor);
+            card.setOpaque(true);
+        }
+
+        return card;
+    }
+
+    private ImageIcon loadProductIcon(int itemId) {
+        // Try different image extensions
+        String[] extensions = {".png", ".jpg", ".jpeg"};
+        
+        for (String ext : extensions) {
+            try {
+                URL imageUrl = getClass().getResource("/images/merchandise/" + itemId + ext);
+                if (imageUrl != null) {
+                    Image original = ImageIO.read(imageUrl);
+                    Image scaled = original.getScaledInstance(imageSize, imageSize, Image.SCALE_SMOOTH);
+                    return new ImageIcon(scaled);
+                }
+            } catch (IOException e) {
+                // Continue to next extension
+            }
+        }
+        
+        // If no image found, return placeholder
+        return createPlaceholderIcon(itemId);
+    }
+
+    private ImageIcon createPlaceholderIcon(int itemId) {
+        BufferedImage image = new BufferedImage(imageSize, imageSize, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g2d = image.createGraphics();
+        
+        // Draw background
+        g2d.setColor(new Color(240, 240, 240));
+        g2d.fillRect(0, 0, imageSize, imageSize);
+        
+        // Draw border
+        g2d.setColor(new Color(200, 200, 200));
+        g2d.drawRect(0, 0, imageSize-1, imageSize-1);
+        
+        // Draw text
+        g2d.setColor(new Color(150, 150, 150));
+        g2d.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        String text = "Item " + itemId;
+        int textWidth = g2d.getFontMetrics().stringWidth(text);
+        g2d.drawString(text, (imageSize - textWidth)/2, imageSize/2);
+        
+        g2d.dispose();
+        return new ImageIcon(image);
+    }
+}
 }

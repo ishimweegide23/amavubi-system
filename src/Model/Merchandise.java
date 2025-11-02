@@ -1,14 +1,35 @@
 package Model;
 
+import javax.persistence.*;
+
+@Entity
+@Table(name = "merchandise") // Maps to "merchandise" table in database
 public class Merchandise {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY) // Auto-increment ID
+    @Column(name = "item_id") // Maps to item_id column
     private int itemId;
+    
+    @Column(name = "name", nullable = false, length = 100)
     private String name;
+    
+    @Column(name = "category", length = 50)
     private String category;
+    
+    @Column(name = "price", nullable = false)
     private double price;
+    
+    @Column(name = "stock_quantity", nullable = false)
     private int stockQuantity;
+    
+    @Column(name = "size", length = 10)
     private String size;
 
-    // Constructor
+    // No-arg constructor REQUIRED by Hibernate
+    public Merchandise() {
+    }
+
+    // Your existing constructor
     public Merchandise(int itemId, String name, String category, double price, int stockQuantity, String size) {
         this.itemId = itemId;
         this.name = name;
@@ -18,7 +39,7 @@ public class Merchandise {
         this.size = size;
     }
 
-    // Getters and Setters
+    // Getters and Setters (keep all existing ones)
     public int getItemId() {
         return itemId;
     }

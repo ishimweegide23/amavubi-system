@@ -1,142 +1,91 @@
 package Dao;
 
 import Model.Merchandise;
-import java.sql.*;
-import java.util.ArrayList;
+import Model.Transaction;
 import java.util.List;
+import org.hibernate.Query;
+import org.hibernate.Session;
+import Util.HibernateUtil;
 
 public class MerchandiseDAO {
 
-    // Get all merchandise items with their available sizes
+    // Get all merchandise items
     public List<Merchandise> getMerchandiseList() {
-        List<Merchandise> merchandiseList = new ArrayList<>();
-        String query = "SELECT * FROM merchandise";
-
-        try (Connection connection = DatabaseConnection.getConnection();
-             PreparedStatement preparedStatement = connection.prepareStatement(query);
-             ResultSet resultSet = preparedStatement.executeQuery()) {
-
-            while (resultSet.next()) {
-                Merchandise merchandise = new Merchandise(
-                    resultSet.getInt("item_id"),
-                    resultSet.getString("name"),
-                    resultSet.getString("category"),
-                    resultSet.getDouble("price"),
-                    resultSet.getInt("stock_quantity"),
-                    resultSet.getString("size")  // Now properly handling sizes
-                );
-                merchandiseList.add(merchandise);
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
+        Session session = HibernateUtil.getSessionFactory().openSession();
+        try {
+            Query query = session.createQuery("FROM Merchandise");
+            return query.list();
+        } finally {
+            session.close();
         }
-        return merchandiseList;
     }
 
-    // Get merchandise by name with size information
-    public Merchandise getMerchandiseByName(String name) {
-        String query = "SELECT * FROM merchandise WHERE name = ?";
-        
-        try (Connection connection = DatabaseConnection.getConnection();
-             PreparedStatement preparedStatement = connection.prepareStatement(query)) {
-            
-            preparedStatement.setString(1, name);
-            try (ResultSet resultSet = preparedStatement.executeQuery()) {
-                if (resultSet.next()) {
-                    return new Merchandise(
-                        resultSet.getInt("item_id"),
-                        resultSet.getString("name"),
-                        resultSet.getString("category"),
-                        resultSet.getDouble("price"),
-                        resultSet.getInt("stock_quantity"),
-                        resultSet.getString("size")  // Include size information
-                    );
-                }
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
+    // Get merchandise by category
+    public List<Merchandise> getMerchandiseByCategory(String category) {
+        Session session = HibernateUtil.getSessionFactory().openSession();
+        try {
+            Query query = session.createQuery("FROM Merchandise WHERE category = :category");
+            query.setParameter("category", category);
+            return query.list();
+        } finally {
+            session.close();
         }
-        return null;
     }
 
-    // Update stock quantity for a specific size (if applicable)
+    // Update stock quantity
     public boolean updateStockQuantity(int itemId, int newQuantity) {
-        String query = "UPDATE merchandise SET stock_quantity = ? WHERE item_id = ?";
+        Session session = HibernateUtil.getSessionFactory().openSession();
+        Transaction transaction = null;
         
-        try (Connection connection = DatabaseConnection.getConnection();
-             PreparedStatement preparedStatement = connection.prepareStatement(query)) {
-            
-            preparedStatement.setInt(1, newQuantity);
-            preparedStatement.setInt(2, itemId);
-            return preparedStatement.executeUpdate() > 0;
-        } catch (SQLException e) {
-            e.printStackTrace();
-            return false;
+        try {
+            transaction = (Transaction) session.beginTransaction();
+            Query query = session.createQuery("UPDATE Merchandise SET stockQuantity = :newQuantity WHERE itemId = :itemId");
+            query.setParameter("newQuantity", newQuantity);
+            query.setParameter("itemId", itemId);
+            int result = query.executeUpdate();
+            transaction.commit();
+            return result > 0;
+        } catch (Exception e) {
+            if (transaction != null) transaction.rollback();
+            throw e;
+        } finally {
+            session.close();
         }
     }
 
-    // Check available sizes for an item
+    // Other methods remain the same as they're view-specific
+    public Merchandise getMerchandiseByName(String name) {
+        Session session = HibernateUtil.getSessionFactory().openSession();
+        try {
+            Query query = session.createQuery("FROM Merchandise WHERE name = :name");
+            query.setParameter("name", name);
+            return (Merchandise) query.uniqueResult();
+        } finally {
+            session.close();
+        }
+    }
+
     public String getAvailableSizes(int itemId) {
-        String query = "SELECT size FROM merchandise WHERE item_id = ?";
-        
-        try (Connection connection = DatabaseConnection.getConnection();
-             PreparedStatement preparedStatement = connection.prepareStatement(query)) {
-            
-            preparedStatement.setInt(1, itemId);
-            try (ResultSet resultSet = preparedStatement.executeQuery()) {
-                if (resultSet.next()) {
-                    return resultSet.getString("size");
-                }
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
+        Session session = HibernateUtil.getSessionFactory().openSession();
+        try {
+            Query query = session.createQuery("SELECT size FROM Merchandise WHERE itemId = :itemId");
+            query.setParameter("itemId", itemId);
+            return (String) query.uniqueResult();
+        } finally {
+            session.close();
         }
-        return null;
     }
 
-    // Check stock availability for specific size
     public boolean checkSizeAvailability(int itemId, String size) {
-        String query = "SELECT stock_quantity FROM merchandise WHERE item_id = ? AND size LIKE ?";
-        
-        try (Connection connection = DatabaseConnection.getConnection();
-             PreparedStatement preparedStatement = connection.prepareStatement(query)) {
-            
-            preparedStatement.setInt(1, itemId);
-            preparedStatement.setString(2, "%" + size + "%");
-            try (ResultSet resultSet = preparedStatement.executeQuery()) {
-                if (resultSet.next()) {
-                    return resultSet.getInt("stock_quantity") > 0;
-                }
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
+        Session session = HibernateUtil.getSessionFactory().openSession();
+        try {
+            Query query = session.createQuery("SELECT stockQuantity FROM Merchandise WHERE itemId = :itemId AND size LIKE :size");
+            query.setParameter("itemId", itemId);
+            query.setParameter("size", "%" + size + "%");
+            Integer quantity = (Integer) query.uniqueResult();
+            return quantity != null && quantity > 0;
+        } finally {
+            session.close();
         }
-        return false;
-    }
-
-    // Get merchandise by ID with size info
-    public Merchandise getMerchandiseById(int itemId) {
-        String query = "SELECT * FROM merchandise WHERE item_id = ?";
-        
-        try (Connection connection = DatabaseConnection.getConnection();
-             PreparedStatement preparedStatement = connection.prepareStatement(query)) {
-            
-            preparedStatement.setInt(1, itemId);
-            try (ResultSet resultSet = preparedStatement.executeQuery()) {
-                if (resultSet.next()) {
-                    return new Merchandise(
-                        resultSet.getInt("item_id"),
-                        resultSet.getString("name"),
-                        resultSet.getString("category"),
-                        resultSet.getDouble("price"),
-                        resultSet.getInt("stock_quantity"),
-                        resultSet.getString("size")
-                    );
-                }
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return null;
     }
 }

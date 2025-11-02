@@ -1,10 +1,16 @@
 
 package view;
+
+import Service.TransactionService;
+import Service.FanService;
 import Dao.TransactionDAO;
+
 import Dao.FanDAO;
 import Model.Fan;
 import Model.Transaction;
+import Util.ExportUtil;
 import com.sun.prism.paint.Gradient;
+import controller.TransactionController;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
@@ -21,101 +27,104 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.io.File;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import javax.swing.JPanel;
 
 
 public class TransactionsPage extends javax.swing.JFrame {
-
-    private int fan;
     private DefaultTableModel transactionTableModel;
     private DefaultTableModel fanTableModel;
-    private TransactionDAO transactionDAO;
-    private FanDAO fanDAO;
+    private final TransactionController transactionController;
+    private final FanService fanService;
     private Fan currentUser;
+    private final FanDAO fanDAO;
+    
 
     
 
  private void performSearch() {
-    String searchTerm = txtSearch.getText().trim();
-    if (searchTerm.isEmpty()) {
-        JOptionPane.showMessageDialog(this, 
-            "Please enter a search term", 
-            "Search Error", JOptionPane.WARNING_MESSAGE);
-        return;
+        String searchTerm = txtSearch.getText().trim();
+        if (searchTerm.isEmpty()) {
+            JOptionPane.showMessageDialog(this, 
+                "Please enter a search term", 
+                "Search Error", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        if (tabbedPane.getSelectedIndex() == 0) {
+            transactionTableModel.setRowCount(0);
+            List<Transaction> results;
+            
+            if (currentUser != null && !"admin".equalsIgnoreCase(currentUser.getRole())) {
+                results = transactionController.searchTransactionsForUser(currentUser.getFanId(), searchTerm);
+            } else {
+                results = transactionController.searchTransactionsWithFanName(searchTerm);
+            }
+            
+            if (results.isEmpty()) {
+                JOptionPane.showMessageDialog(this,
+                    "No transactions found matching: " + searchTerm,
+                    "No Results", JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
+            
+           for (Transaction t : results) {
+    transactionTableModel.addRow(new Object[]{
+        transactionController.getFormattedTransactionId(t),
+        transactionController.getFanName(t.getFanId()), // This now shows correct names
+        transactionController.getTransactionType(t),
+        transactionController.getTransactionDescription(t), // Detailed description
+        t.getAmount(),
+        t.getPaymentMethod(),
+        t.getStatus(),
+        t.getTransactionDate()
+    });
+}
+        } else {
+            fanTableModel.setRowCount(0);
+            List<Fan> results = fanService.searchFans(searchTerm);
+            
+            if (results.isEmpty()) {
+                JOptionPane.showMessageDialog(this,
+                    "No fans found matching: " + searchTerm,
+                    "No Results", JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
+            
+            for (Fan f : results) {
+                fanTableModel.addRow(new Object[]{
+                    f.getFanId(),
+                    f.getNationalId(),
+                    f.getName(),
+                    f.getEmail(),
+                    f.getPhone(),
+                    f.getTier(),
+                    f.getRole()
+                });
+            }
+        }
     }
 
-    if (tabbedPane.getSelectedIndex() == 0) { // Transactions tab
-        transactionTableModel.setRowCount(0);
-        List<Transaction> results;
-        
-        if (currentUser != null && !"admin".equalsIgnoreCase(currentUser.getRole())) {
-            // Regular user - search only their transactions
-            results = transactionDAO.searchTransactionsForUser(currentUser.getFanId(), searchTerm);
-        } else {
-            // Admin - search all transactions
-            results = transactionDAO.searchTransactionsWithFanName(searchTerm);
-        }
-        
-        if (results.isEmpty()) {
-            JOptionPane.showMessageDialog(this,
-                "No transactions found matching: " + searchTerm,
-                "No Results", JOptionPane.INFORMATION_MESSAGE);
-            return;
-        }
-        
-        for (Transaction t : results) {
-            transactionTableModel.addRow(new Object[]{
-                t.getTransactionId(),
-                t.getFanId(),
-                getFanName(t.getFanId()),
-                t.getAmount(),
-                t.getPaymentMethod(),
-                t.getStatus(),
-                t.getTransactionDate()
-            });
-        }
-    } else { // Fan Management tab (admin only)
-        fanTableModel.setRowCount(0);
-        List<Fan> results = fanDAO.searchFans(searchTerm);
-        
-        if (results.isEmpty()) {
-            JOptionPane.showMessageDialog(this,
-                "No fans found matching: " + searchTerm,
-                "No Results", JOptionPane.INFORMATION_MESSAGE);
-            return;
-        }
-        
-        for (Fan f : results) {
-            fanTableModel.addRow(new Object[]{
-                f.getFanId(),
-                f.getNationalId(),
-                f.getName(),
-                f.getEmail(),
-                f.getPhone(),
-                f.getTier(),
-                f.getRole()
-            });
-        }
-    }
-}
-  private void loadTransactions() {
-    transactionTableModel.setRowCount(0); // Clear existing data
+// Example: Replace loadTransactions() method
+private void loadTransactions() {
+    transactionTableModel.setRowCount(0);
     try {
         List<Transaction> transactions;
         
         if (currentUser != null && !"admin".equalsIgnoreCase(currentUser.getRole())) {
-            // Regular user - only get their own transactions
-            transactions = transactionDAO.getTransactionsByFanId(currentUser.getFanId());
+            transactions = transactionController.getTransactionsByFanId(currentUser.getFanId());
         } else {
-            // Admin - get all transactions
-            transactions = transactionDAO.getAllTransactions();
+            transactions = transactionController.getAllTransactions();
         }
 
         for (Transaction t : transactions) {
             transactionTableModel.addRow(new Object[]{
-                t.getTransactionId(),
-                t.getFanId(),
-                getFanName(t.getFanId()),
+                transactionController.getFormattedTransactionId(t),
+                transactionController.getFanName(t.getFanId()), // Fixed: Use controller method
+                transactionController.getTransactionType(t),
+                transactionController.getTransactionDescription(t), // Fixed: Use controller method
                 t.getAmount(),
                 t.getPaymentMethod(),
                 t.getStatus(),
@@ -129,10 +138,34 @@ public class TransactionsPage extends javax.swing.JFrame {
     }
 }
 
-   private void loadFans() {
+ private String getTransactionDescription(Transaction t) {
+    try {
+        if (t.getMatchId() > 0) {
+            // Get match name from controller
+            String matchName = transactionController.getMatchName(t.getMatchId());
+            return matchName != null ? matchName : "Match ID: " + t.getMatchId();
+        } else if (t.getItemId() > 0) {
+            // Get merchandise name from controller
+            String itemName = transactionController.getMerchandiseName(t.getItemId());
+            return itemName != null ? itemName : "Item ID: " + t.getItemId();
+        } else if ("fundraising".equalsIgnoreCase(t.getPaymentMethod())) {
+            return "Fundraising Donation";
+        }
+    } catch (Exception e) {
+        e.printStackTrace();
+        // Fallback to ID if there's an error
+        if (t.getMatchId() > 0) {
+            return "Match ID: " + t.getMatchId();
+        } else if (t.getItemId() > 0) {
+            return "Item ID: " + t.getItemId();
+        }
+    }
+    return "Other Transaction";
+}
+private void loadFans() {
     fanTableModel.setRowCount(0); // Clear existing data
     try {
-        List<Fan> fans = fanDAO.getAllFans();
+        List<Fan> fans = fanService.getAllFans();
         for (Fan fan : fans) {
             fanTableModel.addRow(new Object[]{
                 fan.getFanId(),
@@ -150,19 +183,20 @@ public class TransactionsPage extends javax.swing.JFrame {
             "Error", JOptionPane.ERROR_MESSAGE);
     }
 }
-    private void clearSelection() {
-    transactionTable.clearSelection();
-    comboPaymentMethod.setSelectedIndex(0);
-    comboStatus.setSelectedIndex(0);
-}
-    private String getFanName(int fanId) {
-    try {
-        Fan fan = fanDAO.getFanById(fanId);
-        return fan != null ? fan.getName() : "Unknown";
-    } catch (Exception e) {
-        return "Unknown";
+      private void clearSelection() {
+        transactionTable.clearSelection();
+        comboPaymentMethod.setSelectedIndex(0);
+        comboStatus.setSelectedIndex(0);
     }
-}
+
+    private String getFanName(int fanId) {
+        try {
+            Fan fan = fanDAO.getFanById(fanId);
+            return fan != null ? fan.getName() : "Unknown";
+        } catch (Exception e) {
+            return "Unknown";
+        }
+    }
     
     
     class GradientPanel extends JPanel {
@@ -182,23 +216,23 @@ public class TransactionsPage extends javax.swing.JFrame {
     /**
      * Creates new form TransactionsPage
      */
-  public TransactionsPage(Fan fan) {
-    this.currentUser = fan;
-    this.transactionDAO = new TransactionDAO();
-    this.fanDAO = new FanDAO();
-    initComponents();
-    initializeTableModels();
-    setLocationRelativeTo(null);
-    
-    // Load initial data
-    loadTransactions();
-    
-    // Only show Fan Management tab for admin users
-    if (fan != null && !"admin".equalsIgnoreCase(fan.getRole())) {
-        tabbedPane.removeTabAt(1); // Remove the Fan Management tab
-    } else {
-        loadFans(); // Only load fans if user is admin
-    }
+public TransactionsPage(Fan fan) {
+        this.currentUser = fan;
+        this.transactionController = new TransactionController();
+        this.fanService = new FanService();
+        this.fanDAO = new FanDAO();
+        
+        initComponents();
+        initializeTableModels();
+        setLocationRelativeTo(null);
+        
+        loadTransactions();
+        
+        if (fan != null && !"admin".equalsIgnoreCase(fan.getRole())) {
+            tabbedPane.removeTabAt(1);
+        } else {
+            loadFans();
+        }
 }
   
    private void initializeTableModels() {
@@ -284,6 +318,38 @@ private void styleSingleTableHeader(JTable table, Font font, Color bgColor, Colo
             header.setBackground(bgColor);
         }
     });
+    // Add this after styling the headers
+transactionTable.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
+    @Override
+    public Component getTableCellRendererComponent(JTable table, Object value, 
+            boolean isSelected, boolean hasFocus, int row, int column) {
+        Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+        
+        if (!isSelected) {
+            String type = table.getModel().getValueAt(row, 2).toString();
+            switch (type) {
+                case "Match Ticket":
+                    c.setBackground(new Color(220, 240, 255)); // Light blue
+                    break;
+                case "Merchandise":
+                    c.setBackground(new Color(220, 255, 220)); // Light green
+                    break;
+                case "Fundraising":
+                    c.setBackground(new Color(255, 240, 220)); // Light orange
+                    break;
+                default:
+                    c.setBackground(table.getBackground());
+            }
+        }
+        return c;
+    }
+});
+
+// Set column widths
+transactionTable.getColumnModel().getColumn(0).setPreferredWidth(100); // ID
+transactionTable.getColumnModel().getColumn(1).setPreferredWidth(120); // Fan Name
+transactionTable.getColumnModel().getColumn(2).setPreferredWidth(100); // Type
+transactionTable.getColumnModel().getColumn(3).setPreferredWidth(200); // Description
 }
     /**
      * This method is called from within the constructor to initialize the form.
@@ -313,6 +379,9 @@ private void styleSingleTableHeader(JTable table, Font font, Color bgColor, Colo
         btnDeleteTransaction = new javax.swing.JButton();
         jLabel3 = new javax.swing.JLabel();
         jLabel4 = new javax.swing.JLabel();
+        btnExportTransactionsPDF = new javax.swing.JButton();
+        btnExportTransactionsExcel = new javax.swing.JButton();
+        btnExportTransactionsCSV = new javax.swing.JButton();
         fansPanel = new javax.swing.JPanel();
         jScrollPane2 = new javax.swing.JScrollPane();
         fanTable = new javax.swing.JTable();
@@ -328,15 +397,20 @@ private void styleSingleTableHeader(JTable table, Font font, Color bgColor, Colo
         btnDeleteFan = new javax.swing.JButton();
         btnAddFan = new javax.swing.JButton();
         btnUpdateFan = new javax.swing.JButton();
+        btnExportFansPDF = new javax.swing.JButton();
+        btnExportFansExcel = new javax.swing.JButton();
+        btnExportFansCSV = new javax.swing.JButton();
         jLabel5 = new javax.swing.JLabel();
         backButton = new javax.swing.JButton();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
         setTitle("Amavubi FanHub - Management System");
+        setPreferredSize(new java.awt.Dimension(1000, 702));
         setResizable(false);
 
         mainPanel.setBackground(new java.awt.Color(0, 0, 102));
         mainPanel.setBorder(javax.swing.BorderFactory.createEmptyBorder(20, 20, 20, 20));
+        mainPanel.setPreferredSize(new java.awt.Dimension(1000, 802));
 
         headPanel.setBackground(new java.awt.Color(0, 0, 51));
         headPanel.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 15, 0));
@@ -385,7 +459,7 @@ private void styleSingleTableHeader(JTable table, Font font, Color bgColor, Colo
         headPanelLayout.setHorizontalGroup(
             headPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(headPanelLayout.createSequentialGroup()
-                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addContainerGap(538, Short.MAX_VALUE)
                 .addComponent(btnSearch, javax.swing.GroupLayout.PREFERRED_SIZE, 159, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addGap(62, 62, 62)
                 .addComponent(btnDisplayAll, javax.swing.GroupLayout.PREFERRED_SIZE, 159, javax.swing.GroupLayout.PREFERRED_SIZE)
@@ -428,43 +502,43 @@ private void styleSingleTableHeader(JTable table, Font font, Color bgColor, Colo
         transactionTable.setFont(new java.awt.Font("Segoe UI", 0, 14)); // NOI18N
         transactionTable.setModel(new javax.swing.table.DefaultTableModel(
             new Object [][] {
-                {null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null}
+                {null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null}
             },
             new String [] {
-                "ID", "Fan ID", "Fan Name", "Amount", "Payment Method", "Status", "Date"
+                "Transaction ID", "Fan Name", "Type", "Item/Match", "Amount", "Payment Method", "Status", "Date"
             }
         ));
         transactionTable.setSelectionBackground(new java.awt.Color(0, 51, 0));
@@ -529,65 +603,116 @@ private void styleSingleTableHeader(JTable table, Font font, Color bgColor, Colo
         jLabel4.setForeground(new java.awt.Color(255, 204, 0));
         jLabel4.setText("PAYMENT METHOD");
 
+        btnExportTransactionsPDF.setBackground(new java.awt.Color(153, 153, 0));
+        btnExportTransactionsPDF.setFont(new java.awt.Font("Segoe UI", 1, 14)); // NOI18N
+        btnExportTransactionsPDF.setForeground(new java.awt.Color(255, 255, 255));
+        btnExportTransactionsPDF.setText("Export Transactions (PDF)");
+        btnExportTransactionsPDF.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
+        btnExportTransactionsPDF.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                btnExportTransactionsPDFActionPerformed(evt);
+            }
+        });
+
+        btnExportTransactionsExcel.setBackground(new java.awt.Color(153, 153, 0));
+        btnExportTransactionsExcel.setFont(new java.awt.Font("Segoe UI", 1, 14)); // NOI18N
+        btnExportTransactionsExcel.setForeground(new java.awt.Color(255, 255, 255));
+        btnExportTransactionsExcel.setText("Export Transactions (Excel)");
+        btnExportTransactionsExcel.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
+        btnExportTransactionsExcel.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                btnExportTransactionsExcelActionPerformed(evt);
+            }
+        });
+
+        btnExportTransactionsCSV.setBackground(new java.awt.Color(153, 153, 0));
+        btnExportTransactionsCSV.setFont(new java.awt.Font("Segoe UI", 1, 14)); // NOI18N
+        btnExportTransactionsCSV.setForeground(new java.awt.Color(255, 255, 255));
+        btnExportTransactionsCSV.setText("Export Transactions (CSV)");
+        btnExportTransactionsCSV.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
+        btnExportTransactionsCSV.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                btnExportTransactionsCSVActionPerformed(evt);
+            }
+        });
+
         javax.swing.GroupLayout jPanel1Layout = new javax.swing.GroupLayout(jPanel1);
         jPanel1.setLayout(jPanel1Layout);
         jPanel1Layout.setHorizontalGroup(
             jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(jPanel1Layout.createSequentialGroup()
-                .addGap(99, 99, 99)
-                .addComponent(btnClear, javax.swing.GroupLayout.PREFERRED_SIZE, 111, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(103, 103, 103)
-                .addComponent(btnUpdateTransaction, javax.swing.GroupLayout.PREFERRED_SIZE, 115, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(66, 66, 66)
-                .addComponent(btnDeleteTransaction, javax.swing.GroupLayout.PREFERRED_SIZE, 120, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel1Layout.createSequentialGroup()
+                .addGap(60, 60, 60)
+                .addComponent(btnExportTransactionsPDF, javax.swing.GroupLayout.PREFERRED_SIZE, 211, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGap(65, 65, 65)
+                .addComponent(btnExportTransactionsExcel)
+                .addGap(51, 51, 51)
+                .addComponent(btnExportTransactionsCSV)
+                .addContainerGap(87, Short.MAX_VALUE))
+            .addGroup(jPanel1Layout.createSequentialGroup()
                 .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                 .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(jLabel3, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.PREFERRED_SIZE, 106, javax.swing.GroupLayout.PREFERRED_SIZE)
-                    .addComponent(jLabel4, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.PREFERRED_SIZE, 137, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addGap(35, 35, 35)
-                .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(comboPaymentMethod, javax.swing.GroupLayout.PREFERRED_SIZE, 146, javax.swing.GroupLayout.PREFERRED_SIZE)
-                    .addComponent(comboStatus, javax.swing.GroupLayout.PREFERRED_SIZE, 113, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addGap(277, 277, 277))
+                    .addGroup(jPanel1Layout.createSequentialGroup()
+                        .addComponent(btnClear, javax.swing.GroupLayout.PREFERRED_SIZE, 111, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .addComponent(btnUpdateTransaction, javax.swing.GroupLayout.PREFERRED_SIZE, 115, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addGap(143, 143, 143)
+                        .addComponent(btnDeleteTransaction, javax.swing.GroupLayout.PREFERRED_SIZE, 120, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addGap(140, 140, 140))
+                    .addGroup(jPanel1Layout.createSequentialGroup()
+                        .addComponent(jLabel4, javax.swing.GroupLayout.PREFERRED_SIZE, 137, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addGap(36, 36, 36)
+                        .addComponent(comboPaymentMethod, javax.swing.GroupLayout.PREFERRED_SIZE, 146, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addGap(90, 90, 90)
+                        .addComponent(jLabel3, javax.swing.GroupLayout.PREFERRED_SIZE, 106, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addGap(18, 18, 18)
+                        .addComponent(comboStatus, javax.swing.GroupLayout.PREFERRED_SIZE, 113, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))))
         );
         jPanel1Layout.setVerticalGroup(
             jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(jPanel1Layout.createSequentialGroup()
-                .addContainerGap()
-                .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
-                    .addComponent(jLabel3, javax.swing.GroupLayout.PREFERRED_SIZE, 20, javax.swing.GroupLayout.PREFERRED_SIZE)
-                    .addComponent(comboStatus, javax.swing.GroupLayout.PREFERRED_SIZE, 32, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-                    .addComponent(jLabel4, javax.swing.GroupLayout.PREFERRED_SIZE, 20, javax.swing.GroupLayout.PREFERRED_SIZE)
-                    .addComponent(comboPaymentMethod, javax.swing.GroupLayout.DEFAULT_SIZE, 27, Short.MAX_VALUE))
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING, false)
-                    .addGroup(javax.swing.GroupLayout.Alignment.LEADING, jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                        .addComponent(btnUpdateTransaction, javax.swing.GroupLayout.PREFERRED_SIZE, 37, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addComponent(btnDeleteTransaction, javax.swing.GroupLayout.PREFERRED_SIZE, 37, javax.swing.GroupLayout.PREFERRED_SIZE))
-                    .addComponent(btnClear, javax.swing.GroupLayout.Alignment.LEADING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel1Layout.createSequentialGroup()
+                        .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                            .addComponent(jLabel3, javax.swing.GroupLayout.PREFERRED_SIZE, 20, javax.swing.GroupLayout.PREFERRED_SIZE)
+                            .addComponent(comboStatus, javax.swing.GroupLayout.PREFERRED_SIZE, 32, javax.swing.GroupLayout.PREFERRED_SIZE))
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED))
+                    .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel1Layout.createSequentialGroup()
+                        .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                            .addComponent(jLabel4, javax.swing.GroupLayout.PREFERRED_SIZE, 20, javax.swing.GroupLayout.PREFERRED_SIZE)
+                            .addComponent(comboPaymentMethod, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                        .addGap(6, 6, 6)))
+                .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addComponent(btnDeleteTransaction)
+                    .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                        .addComponent(btnClear, javax.swing.GroupLayout.Alignment.TRAILING)
+                        .addComponent(btnUpdateTransaction)))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(btnExportTransactionsCSV)
+                    .addComponent(btnExportTransactionsExcel)
+                    .addComponent(btnExportTransactionsPDF))
+                .addGap(36, 36, 36))
         );
 
         javax.swing.GroupLayout transactionPanelLayout = new javax.swing.GroupLayout(transactionPanel);
         transactionPanel.setLayout(transactionPanelLayout);
         transactionPanelLayout.setHorizontalGroup(
             transactionPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addComponent(jPanel1, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
             .addGroup(transactionPanelLayout.createSequentialGroup()
                 .addContainerGap()
-                .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 788, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-            .addComponent(jPanel1, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addComponent(jScrollPane1)
+                .addContainerGap())
         );
         transactionPanelLayout.setVerticalGroup(
             transactionPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(transactionPanelLayout.createSequentialGroup()
-                .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 218, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 248, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(jPanel1, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .addComponent(jPanel1, javax.swing.GroupLayout.PREFERRED_SIZE, 141, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addContainerGap())
         );
 
         tabbedPane.addTab("Transactions", transactionPanel);
@@ -702,6 +827,42 @@ private void styleSingleTableHeader(JTable table, Font font, Color bgColor, Colo
             }
         });
 
+        btnExportFansPDF.setBackground(new java.awt.Color(0, 102, 14));
+        btnExportFansPDF.setFont(new java.awt.Font("Segoe UI", 1, 15)); // NOI18N
+        btnExportFansPDF.setForeground(new java.awt.Color(255, 255, 255));
+        btnExportFansPDF.setText("Export Fans (PDF)");
+        btnExportFansPDF.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
+        btnExportFansPDF.setPreferredSize(new java.awt.Dimension(101, 33));
+        btnExportFansPDF.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                btnExportFansPDFActionPerformed(evt);
+            }
+        });
+
+        btnExportFansExcel.setBackground(new java.awt.Color(0, 102, 14));
+        btnExportFansExcel.setFont(new java.awt.Font("Segoe UI", 1, 15)); // NOI18N
+        btnExportFansExcel.setForeground(new java.awt.Color(255, 255, 255));
+        btnExportFansExcel.setText("Export Fans (Excel)");
+        btnExportFansExcel.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
+        btnExportFansExcel.setMinimumSize(new java.awt.Dimension(101, 33));
+        btnExportFansExcel.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                btnExportFansExcelActionPerformed(evt);
+            }
+        });
+
+        btnExportFansCSV.setBackground(new java.awt.Color(0, 102, 14));
+        btnExportFansCSV.setFont(new java.awt.Font("Segoe UI", 1, 15)); // NOI18N
+        btnExportFansCSV.setForeground(new java.awt.Color(255, 255, 255));
+        btnExportFansCSV.setText("Export Fans (CSV)");
+        btnExportFansCSV.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
+        btnExportFansCSV.setMinimumSize(new java.awt.Dimension(101, 33));
+        btnExportFansCSV.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                btnExportFansCSVActionPerformed(evt);
+            }
+        });
+
         javax.swing.GroupLayout jPanel2Layout = new javax.swing.GroupLayout(jPanel2);
         jPanel2.setLayout(jPanel2Layout);
         jPanel2Layout.setHorizontalGroup(
@@ -723,15 +884,25 @@ private void styleSingleTableHeader(JTable table, Font font, Color bgColor, Colo
                 .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
                     .addComponent(txtFanPhone, javax.swing.GroupLayout.PREFERRED_SIZE, 144, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(comboTier, javax.swing.GroupLayout.PREFERRED_SIZE, 144, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .addContainerGap(270, Short.MAX_VALUE))
             .addGroup(jPanel2Layout.createSequentialGroup()
-                .addGap(70, 70, 70)
-                .addComponent(btnAddFan, javax.swing.GroupLayout.PREFERRED_SIZE, 134, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(103, 103, 103)
-                .addComponent(btnUpdateFan, javax.swing.GroupLayout.PREFERRED_SIZE, 134, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 150, Short.MAX_VALUE)
-                .addComponent(btnDeleteFan, javax.swing.GroupLayout.PREFERRED_SIZE, 133, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(82, 82, 82))
+                .addGap(94, 94, 94)
+                .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
+                    .addComponent(btnAddFan, javax.swing.GroupLayout.PREFERRED_SIZE, 112, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(btnExportFansPDF, javax.swing.GroupLayout.PREFERRED_SIZE, 165, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
+                    .addGroup(jPanel2Layout.createSequentialGroup()
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .addComponent(btnUpdateFan, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addGap(82, 82, 82)
+                        .addComponent(btnDeleteFan, javax.swing.GroupLayout.PREFERRED_SIZE, 133, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addGap(235, 235, 235))
+                    .addGroup(jPanel2Layout.createSequentialGroup()
+                        .addGap(98, 98, 98)
+                        .addComponent(btnExportFansExcel, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .addComponent(btnExportFansCSV, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addGap(67, 67, 67))))
         );
         jPanel2Layout.setVerticalGroup(
             jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -757,12 +928,18 @@ private void styleSingleTableHeader(JTable table, Font font, Color bgColor, Colo
                         .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                             .addComponent(comboTier, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                             .addComponent(jLabel9, javax.swing.GroupLayout.PREFERRED_SIZE, 22, javax.swing.GroupLayout.PREFERRED_SIZE))))
-                .addGap(22, 22, 22)
-                .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(btnDeleteFan, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGap(18, 18, 18)
+                .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addComponent(btnUpdateFan, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(btnAddFan, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                    .addComponent(btnUpdateFan, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addContainerGap(35, Short.MAX_VALUE))
+                    .addComponent(btnDeleteFan, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addGap(18, 18, 18)
+                .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                        .addComponent(btnExportFansExcel, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addComponent(btnExportFansCSV, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                    .addComponent(btnExportFansPDF, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addContainerGap(31, Short.MAX_VALUE))
         );
 
         javax.swing.GroupLayout fansPanelLayout = new javax.swing.GroupLayout(fansPanel);
@@ -772,15 +949,17 @@ private void styleSingleTableHeader(JTable table, Font font, Color bgColor, Colo
             .addComponent(jPanel2, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
             .addGroup(fansPanelLayout.createSequentialGroup()
                 .addContainerGap()
-                .addComponent(jScrollPane2, javax.swing.GroupLayout.DEFAULT_SIZE, 786, Short.MAX_VALUE)
+                .addComponent(jScrollPane2, javax.swing.GroupLayout.DEFAULT_SIZE, 868, Short.MAX_VALUE)
                 .addContainerGap())
         );
         fansPanelLayout.setVerticalGroup(
             fansPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, fansPanelLayout.createSequentialGroup()
-                .addComponent(jScrollPane2, javax.swing.GroupLayout.DEFAULT_SIZE, 204, Short.MAX_VALUE)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(jPanel2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addContainerGap()
+                .addComponent(jScrollPane2, javax.swing.GroupLayout.PREFERRED_SIZE, 155, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addComponent(jPanel2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGap(21, 21, 21))
         );
 
         tabbedPane.addTab("Fan Management", fansPanel);
@@ -807,18 +986,21 @@ private void styleSingleTableHeader(JTable table, Font font, Color bgColor, Colo
         mainPanelLayout.setHorizontalGroup(
             mainPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(mainPanelLayout.createSequentialGroup()
-                .addGap(34, 34, 34)
-                .addComponent(tabbedPane, javax.swing.GroupLayout.PREFERRED_SIZE, 811, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, mainPanelLayout.createSequentialGroup()
-                .addGap(141, 141, 141)
-                .addComponent(jLabel5, javax.swing.GroupLayout.PREFERRED_SIZE, 271, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                .addComponent(backButton)
-                .addGap(157, 157, 157))
-            .addGroup(mainPanelLayout.createSequentialGroup()
-                .addGap(22, 22, 22)
-                .addComponent(headPanel, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addGroup(mainPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(mainPanelLayout.createSequentialGroup()
+                        .addGap(22, 22, 22)
+                        .addComponent(headPanel, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                    .addGroup(mainPanelLayout.createSequentialGroup()
+                        .addGroup(mainPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addGroup(mainPanelLayout.createSequentialGroup()
+                                .addGap(34, 34, 34)
+                                .addComponent(tabbedPane, javax.swing.GroupLayout.PREFERRED_SIZE, 893, javax.swing.GroupLayout.PREFERRED_SIZE))
+                            .addGroup(mainPanelLayout.createSequentialGroup()
+                                .addGap(113, 113, 113)
+                                .addComponent(jLabel5, javax.swing.GroupLayout.PREFERRED_SIZE, 271, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addGap(176, 176, 176)
+                                .addComponent(backButton)))
+                        .addGap(0, 0, Short.MAX_VALUE)))
                 .addContainerGap())
         );
         mainPanelLayout.setVerticalGroup(
@@ -826,12 +1008,12 @@ private void styleSingleTableHeader(JTable table, Font font, Color bgColor, Colo
             .addGroup(mainPanelLayout.createSequentialGroup()
                 .addComponent(headPanel, javax.swing.GroupLayout.PREFERRED_SIZE, 137, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                .addComponent(tabbedPane, javax.swing.GroupLayout.PREFERRED_SIZE, 417, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(16, 16, 16)
-                .addGroup(mainPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(jLabel5, javax.swing.GroupLayout.PREFERRED_SIZE, 23, javax.swing.GroupLayout.PREFERRED_SIZE)
-                    .addComponent(backButton))
-                .addGap(0, 52, Short.MAX_VALUE))
+                .addComponent(tabbedPane, javax.swing.GroupLayout.PREFERRED_SIZE, 432, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addGroup(mainPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addComponent(backButton)
+                    .addComponent(jLabel5, javax.swing.GroupLayout.PREFERRED_SIZE, 23, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addContainerGap())
         );
 
         class GradientPanel extends JPanel {
@@ -851,7 +1033,6 @@ private void styleSingleTableHeader(JTable table, Font font, Color bgColor, Colo
         getContentPane().add(mainPanel, java.awt.BorderLayout.LINE_START);
 
         pack();
-        setLocationRelativeTo(null);
     }// </editor-fold>//GEN-END:initComponents
 
     private void txtSearchActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_txtSearchActionPerformed
@@ -910,65 +1091,59 @@ comboStatus.setSelectedIndex(0);
     private void btnUpdateTransactionActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnUpdateTransactionActionPerformed
         // TODO add your handling code here:
                                                        
-    int selectedRow = transactionTable.getSelectedRow();
-    if (selectedRow < 0) {
-        JOptionPane.showMessageDialog(this, "Please select a transaction to update", 
-            "No Selection", JOptionPane.WARNING_MESSAGE);
-        return;
-    }
-    
-    // Safe type casting
-    Object transactionIdObj = transactionTableModel.getValueAt(selectedRow, 0);
-    Object fanIdObj = transactionTableModel.getValueAt(selectedRow, 1);
-    
-    if (!(transactionIdObj instanceof Integer) || !(fanIdObj instanceof Integer)) {
-        JOptionPane.showMessageDialog(this, "Invalid transaction data", 
-            "Error", JOptionPane.ERROR_MESSAGE);
-        return;
-    }
-    
-    int transactionId = (Integer) transactionIdObj;
-    int fanId = (Integer) fanIdObj;
-    
-    // Null-safe user check
-    if (currentUser != null && !"admin".equalsIgnoreCase(currentUser.getRole())) {
-        if (fanId != currentUser.getFanId()) {
-            JOptionPane.showMessageDialog(this, 
-                "You can only update your own transactions", 
-                "Access Denied", JOptionPane.WARNING_MESSAGE);
+     int selectedRow = transactionTable.getSelectedRow();
+        if (selectedRow < 0) {
+            JOptionPane.showMessageDialog(this, "Please select a transaction to update", 
+                "No Selection", JOptionPane.WARNING_MESSAGE);
             return;
         }
-    }
-    
-    String message = "Update Transaction Details:\n\n" +
-                     "Transaction ID: " + transactionId + "\n" +
-                     "Fan ID: " + fanId + "\n" +
-                     "Payment Method: " + comboPaymentMethod.getSelectedItem() + "\n" +
-                     "Status: " + comboStatus.getSelectedItem() + "\n\n" +
-                     "Are you sure you want to update this transaction?";
-    
-    int confirm = JOptionPane.showConfirmDialog(this, message, 
-        "Confirm Update", JOptionPane.YES_NO_OPTION);
-    
-    if (confirm == JOptionPane.YES_OPTION) {
+        
         try {
-            boolean success = transactionDAO.updateTransaction(
-                transactionId,
-                (String) comboPaymentMethod.getSelectedItem(),
-                (String) comboStatus.getSelectedItem()
-            );
+            String formattedId = transactionTableModel.getValueAt(selectedRow, 0).toString();
+            int transactionId = Integer.parseInt(formattedId.split("-")[1]);
+            String fanName = transactionTableModel.getValueAt(selectedRow, 1).toString();
             
-            if (success) {
-                JOptionPane.showMessageDialog(this, "Transaction updated successfully");
-                loadTransactions();
-            } else {
-                JOptionPane.showMessageDialog(this, "Failed to update transaction");
+            if (currentUser != null && !"admin".equalsIgnoreCase(currentUser.getRole())) {
+                if (!fanName.equals(currentUser.getName())) {
+                    JOptionPane.showMessageDialog(this, 
+                        "You can only update your own transactions", 
+                        "Access Denied", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+            }
+            
+            String paymentMethod = (String) comboPaymentMethod.getSelectedItem();
+            String status = (String) comboStatus.getSelectedItem();
+            
+            String message = "Update Transaction Details:\n\n" +
+                             "Transaction ID: " + formattedId + "\n" +
+                             "Fan Name: " + fanName + "\n" +
+                             "Payment Method: " + paymentMethod + "\n" +
+                             "Status: " + status + "\n\n" +
+                             "Are you sure you want to update this transaction?";
+            
+            int confirm = JOptionPane.showConfirmDialog(this, message, 
+                "Confirm Update", JOptionPane.YES_NO_OPTION);
+            
+            if (confirm == JOptionPane.YES_OPTION) {
+                boolean success = transactionController.updateTransaction(
+                    transactionId,
+                    paymentMethod,
+                    status
+                );
+                
+                if (success) {
+                    JOptionPane.showMessageDialog(this, "Transaction updated successfully");
+                    loadTransactions();
+                } else {
+                    JOptionPane.showMessageDialog(this, "Failed to update transaction",
+                        "Error", JOptionPane.ERROR_MESSAGE);
+                }
             }
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Error updating transaction: " + ex.getMessage(), 
                 "Error", JOptionPane.ERROR_MESSAGE);
         }
-    }
 
 
     }//GEN-LAST:event_btnUpdateTransactionActionPerformed
@@ -977,51 +1152,43 @@ comboStatus.setSelectedIndex(0);
         // TODO add your handling code here:
                                                        
     int selectedRow = transactionTable.getSelectedRow();
-    if (selectedRow < 0) {
-        JOptionPane.showMessageDialog(this, "Please select a transaction to delete", 
-            "No Selection", JOptionPane.WARNING_MESSAGE);
-        return;
-    }
-    
-    // Safe type casting
-    Object transactionIdObj = transactionTableModel.getValueAt(selectedRow, 0);
-    Object fanIdObj = transactionTableModel.getValueAt(selectedRow, 1);
-    Object amountObj = transactionTableModel.getValueAt(selectedRow, 3);
-    
-    if (!(transactionIdObj instanceof Integer) || !(fanIdObj instanceof Integer)) {
-        JOptionPane.showMessageDialog(this, "Invalid transaction data", 
-            "Error", JOptionPane.ERROR_MESSAGE);
-        return;
-    }
-    
-    int transactionId = (Integer) transactionIdObj;
-    int fanId = (Integer) fanIdObj;
-    
-    String message = "Delete Transaction Details:\n\n" +
-                     "Transaction ID: " + transactionId + "\n" +
-                     "Fan ID: " + fanId + "\n" +
-                     "Amount: " + amountObj + "\n\n" +
-                     "Are you sure you want to delete this transaction?";
-    
-    int confirm = JOptionPane.showConfirmDialog(this, message, 
-        "Confirm Deletion", JOptionPane.YES_NO_OPTION);
-    
-    if (confirm == JOptionPane.YES_OPTION) {
+        if (selectedRow < 0) {
+            JOptionPane.showMessageDialog(this, "Please select a transaction to delete", 
+                "No Selection", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        
         try {
-            boolean success = transactionDAO.deleteTransaction(transactionId);
+            String formattedId = transactionTableModel.getValueAt(selectedRow, 0).toString();
+            int transactionId = Integer.parseInt(formattedId.split("-")[1]);
+            String fanName = transactionTableModel.getValueAt(selectedRow, 1).toString();
+            String amount = transactionTableModel.getValueAt(selectedRow, 4).toString();
             
-            if (success) {
-                JOptionPane.showMessageDialog(this, "Transaction deleted successfully");
-                loadTransactions();
-                clearSelection();
-            } else {
-                JOptionPane.showMessageDialog(this, "Failed to delete transaction");
+            String message = "Delete Transaction Details:\n\n" +
+                             "Transaction ID: " + formattedId + "\n" +
+                             "Fan Name: " + fanName + "\n" +
+                             "Amount: " + amount + "\n\n" +
+                             "Are you sure you want to delete this transaction?";
+            
+            int confirm = JOptionPane.showConfirmDialog(this, message, 
+                "Confirm Deletion", JOptionPane.YES_NO_OPTION);
+            
+            if (confirm == JOptionPane.YES_OPTION) {
+                boolean success = transactionController.deleteTransaction(transactionId);
+                
+                if (success) {
+                    JOptionPane.showMessageDialog(this, "Transaction deleted successfully");
+                    loadTransactions();
+                    clearSelection();
+                } else {
+                    JOptionPane.showMessageDialog(this, "Failed to delete transaction",
+                        "Error", JOptionPane.ERROR_MESSAGE);
+                }
             }
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Error deleting transaction: " + ex.getMessage(), 
                 "Error", JOptionPane.ERROR_MESSAGE);
         }
-    }
 
     }//GEN-LAST:event_btnDeleteTransactionActionPerformed
 
@@ -1184,6 +1351,298 @@ comboStatus.setSelectedIndex(0);
          String selectedTier = comboTier.getSelectedItem().toString();
     }//GEN-LAST:event_comboTierActionPerformed
 
+    private void btnExportTransactionsPDFActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnExportTransactionsPDFActionPerformed
+        // TODO add your handling code here:
+        
+        try {
+        List<Transaction> transactions = transactionController.getAllTransactions();
+        if (transactions.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "No transactions to export", "Info", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        
+        String filePath = ExportUtil.getExportFilePath(
+            "Export Transactions to PDF", 
+            "Amavubi_Transactions_" + new SimpleDateFormat("yyyyMMdd").format(new Date()),
+            ".pdf");
+        
+        if (filePath != null) {
+            boolean success = ExportUtil.exportTransactionsToPDF(transactions, filePath);
+            if (success) {
+                JOptionPane.showMessageDialog(this, "Transactions exported to PDF successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
+            } else {
+                JOptionPane.showMessageDialog(this, "Failed to export transactions", "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    } catch (Exception ex) {
+        JOptionPane.showMessageDialog(this, "Error exporting transactions: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        ex.printStackTrace();
+    }
+    }//GEN-LAST:event_btnExportTransactionsPDFActionPerformed
+
+    private void btnExportTransactionsExcelActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnExportTransactionsExcelActionPerformed
+        // TODO add your handling code here:
+         try {
+        List<Transaction> transactions = transactionController.getAllTransactions();
+        if (transactions.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "No transactions to export", "Info", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        
+        String filePath = ExportUtil.getExportFilePath(
+            "Export Transactions to Excel", 
+            "Amavubi_Transactions_" + new SimpleDateFormat("yyyyMMdd").format(new Date()),
+            ".xlsx");
+        
+        if (filePath != null) {
+            boolean success = ExportUtil.exportToExcel(transactions, filePath, "transactions");
+            if (success) {
+                JOptionPane.showMessageDialog(this, "Transactions exported to Excel successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
+            } else {
+                JOptionPane.showMessageDialog(this, "Failed to export transactions", "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    } catch (Exception ex) {
+        JOptionPane.showMessageDialog(this, "Error exporting transactions: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        ex.printStackTrace();
+    }
+
+    }//GEN-LAST:event_btnExportTransactionsExcelActionPerformed
+
+    private void btnExportTransactionsCSVActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnExportTransactionsCSVActionPerformed
+        // TODO add your handling code here:
+        try {
+        List<Transaction> transactions = transactionController.getAllTransactions();
+        if (transactions.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "No transactions to export", "Info", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        
+        String filePath = ExportUtil.getExportFilePath(
+            "Export Transactions to CSV", 
+            "Amavubi_Transactions_" + new SimpleDateFormat("yyyyMMdd").format(new Date()),
+            ".csv");
+        
+        if (filePath != null) {
+            boolean success = ExportUtil.exportToCSV(transactions, filePath, "transactions");
+            if (success) {
+                JOptionPane.showMessageDialog(this, "Transactions exported to CSV successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
+            } else {
+                JOptionPane.showMessageDialog(this, "Failed to export transactions", "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    } catch (Exception ex) {
+        JOptionPane.showMessageDialog(this, "Error exporting transactions: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        ex.printStackTrace();
+    }
+    }//GEN-LAST:event_btnExportTransactionsCSVActionPerformed
+
+    private void btnExportFansPDFActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnExportFansPDFActionPerformed
+        // TODO add your handling code here:
+        
+        try {
+        List<Fan> fans = fanService.getAllFans();
+        if (fans.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "No fans to export", "Info", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        
+        String filePath = ExportUtil.getExportFilePath(
+            "Export Fans to PDF", 
+            "Amavubi_Fans_" + new SimpleDateFormat("yyyyMMdd").format(new Date()),
+            ".pdf");
+        
+        if (filePath != null) {
+            boolean success = ExportUtil.exportFansToPDF(fans, filePath);
+            if (success) {
+                JOptionPane.showMessageDialog(this, 
+                    fans.size() + " fans exported to PDF successfully!", 
+                    "Success", JOptionPane.INFORMATION_MESSAGE);
+            } else {
+                JOptionPane.showMessageDialog(this, "Failed to export fans", "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    } catch (Exception ex) {
+        JOptionPane.showMessageDialog(this, 
+            "Error exporting fans: " + ex.getMessage(), 
+            "Error", JOptionPane.ERROR_MESSAGE);
+        ex.printStackTrace();
+    }
+    }//GEN-LAST:event_btnExportFansPDFActionPerformed
+
+    private void btnExportFansExcelActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnExportFansExcelActionPerformed
+        // TODO add your handling code here:
+         try {
+        List<Fan> fans = fanService.getAllFans();
+        if (fans.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "No fans to export", "Info", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        
+        String filePath = ExportUtil.getExportFilePath(
+            "Export Fans to Excel", 
+            "Amavubi_Fans_" + new SimpleDateFormat("yyyyMMdd").format(new Date()),
+            ".xlsx");
+        
+        if (filePath != null) {
+            boolean success = ExportUtil.exportToExcel(fans, filePath, "fans");
+            if (success) {
+                JOptionPane.showMessageDialog(this, 
+                    fans.size() + " fans exported to Excel successfully!", 
+                    "Success", JOptionPane.INFORMATION_MESSAGE);
+            } else {
+                JOptionPane.showMessageDialog(this, "Failed to export fans", "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    } catch (Exception ex) {
+        JOptionPane.showMessageDialog(this, 
+            "Error exporting fans: " + ex.getMessage(), 
+            "Error", JOptionPane.ERROR_MESSAGE);
+        ex.printStackTrace();
+    }
+    }//GEN-LAST:event_btnExportFansExcelActionPerformed
+
+    private void btnExportFansCSVActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnExportFansCSVActionPerformed
+        // TODO add your handling code here:
+        try {
+        List<Fan> fans = fanService.getAllFans();
+        if (fans.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "No fans to export", "Info", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        
+        String filePath = ExportUtil.getExportFilePath(
+            "Export Fans to CSV", 
+            "Amavubi_Fans_" + new SimpleDateFormat("yyyyMMdd").format(new Date()),
+            ".csv");
+        
+        if (filePath != null) {
+            boolean success = ExportUtil.exportToCSV(fans, filePath, "fans");
+            if (success) {
+                JOptionPane.showMessageDialog(this, 
+                    fans.size() + " fans exported to CSV successfully!", 
+                    "Success", JOptionPane.INFORMATION_MESSAGE);
+            } else {
+                JOptionPane.showMessageDialog(this, "Failed to export fans", "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    } catch (Exception ex) {
+        JOptionPane.showMessageDialog(this, 
+            "Error exporting fans: " + ex.getMessage(), 
+            "Error", JOptionPane.ERROR_MESSAGE);
+        ex.printStackTrace();
+    }
+    }//GEN-LAST:event_btnExportFansCSVActionPerformed
+
+    
+    private String getFormattedTransactionId(Transaction t) {
+    if (t.getMatchId() != 0) { // Assuming 0 means NULL in your model
+        return "TKT-" + t.getTransactionId();
+    } else if (t.getItemId() != 0) {
+        return "MER-" + t.getTransactionId();
+    } else if ("fundraising".equalsIgnoreCase(t.getPaymentMethod())) {
+        return "FUND-" + t.getTransactionId();
+    } else {
+        return "TRN-" + t.getTransactionId();
+    }
+}
+
+private String getTransactionType(Transaction t) {
+    if (t.getMatchId() != 0) {
+        return "Match Ticket";
+    } else if (t.getItemId() != 0) {
+        return "Merchandise";
+    } else if ("fundraising".equalsIgnoreCase(t.getPaymentMethod())) {
+        return "Fundraising";
+    } else {
+        return "Other";
+    }
+}
+
+
+private void exportTransactions(String format) {
+    try {
+        List<Transaction> transactions = transactionController.getAllTransactions();
+        if (transactions.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "No transactions to export", "Info", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("Save Transaction Export");
+        fileChooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
+        
+        String extension = format.equals("pdf") ? ".pdf" : format.equals("excel") ? ".xlsx" : ".csv";
+        fileChooser.setSelectedFile(new File("Amavubi_Transactions_" + new SimpleDateFormat("yyyyMMdd").format(new Date()) + extension));
+
+        if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+            File file = fileChooser.getSelectedFile();
+            String filePath = file.getAbsolutePath();
+            
+            switch (format) {
+                case "pdf":
+                    ExportUtil.exportTransactionsToPDF(transactions, filePath);
+                    break;
+                case "excel":
+                    ExportUtil.exportToExcel(transactions, filePath, "transactions");
+                    break;
+                case "csv":
+                    ExportUtil.exportToCSV(transactions, filePath, "transactions");
+                    break;
+            }
+            
+            JOptionPane.showMessageDialog(this, "Transactions exported successfully to " + filePath, 
+                "Export Success", JOptionPane.INFORMATION_MESSAGE);
+        }
+    } catch (Exception ex) {
+        JOptionPane.showMessageDialog(this, "Error exporting transactions: " + ex.getMessage(), 
+            "Export Error", JOptionPane.ERROR_MESSAGE);
+        ex.printStackTrace();
+    }
+}
+
+private void exportFans(String format) {
+    try {
+        List<Fan> fans = fanService.getAllFans();
+        if (fans.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "No fans to export", "Info", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("Save Fans Export");
+        fileChooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
+        
+        String extension = format.equals("pdf") ? ".pdf" : format.equals("excel") ? ".xlsx" : ".csv";
+        fileChooser.setSelectedFile(new File("Amavubi_Fans_" + new SimpleDateFormat("yyyyMMdd").format(new Date()) + extension));
+
+        if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+            File file = fileChooser.getSelectedFile();
+            String filePath = file.getAbsolutePath();
+            
+            switch (format) {
+                case "pdf":
+                    ExportUtil.exportFansToPDF(fans, filePath);
+                    break;
+                case "excel":
+                    ExportUtil.exportToExcel(fans, filePath, "fans");
+                    break;
+                case "csv":
+                    ExportUtil.exportToCSV(fans, filePath, "fans");
+                    break;
+            }
+            
+            JOptionPane.showMessageDialog(this, "Fans exported successfully to " + filePath, 
+                "Export Success", JOptionPane.INFORMATION_MESSAGE);
+        }
+    } catch (Exception ex) {
+        JOptionPane.showMessageDialog(this, "Error exporting fans: " + ex.getMessage(), 
+            "Export Error", JOptionPane.ERROR_MESSAGE);
+        ex.printStackTrace();
+    }
+}
+
+
     /**
      * @param args the command line arguments
      */
@@ -1229,6 +1688,12 @@ comboStatus.setSelectedIndex(0);
     private javax.swing.JButton btnDeleteFan;
     private javax.swing.JButton btnDeleteTransaction;
     private javax.swing.JButton btnDisplayAll;
+    private javax.swing.JButton btnExportFansCSV;
+    private javax.swing.JButton btnExportFansExcel;
+    private javax.swing.JButton btnExportFansPDF;
+    private javax.swing.JButton btnExportTransactionsCSV;
+    private javax.swing.JButton btnExportTransactionsExcel;
+    private javax.swing.JButton btnExportTransactionsPDF;
     private javax.swing.JButton btnSearch;
     private javax.swing.JButton btnUpdateFan;
     private javax.swing.JButton btnUpdateTransaction;

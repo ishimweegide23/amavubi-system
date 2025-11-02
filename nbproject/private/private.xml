@@ -3,14 +3,14 @@
     <editor-bookmarks xmlns="http://www.netbeans.org/ns/editor-bookmarks/2" lastBookmarkId="0"/>
     <open-files xmlns="http://www.netbeans.org/ns/projectui-open-files/2">
         <group>
-            <file>file:/C:/Users/Hey/OneDrive/Documents/NetBeansProjects/Amavubi%20Fan%20hub/src/View/RegistrationPage.java</file>
-            <file>file:/C:/Users/Hey/OneDrive/Documents/NetBeansProjects/Amavubi%20Fan%20hub/src/View/TransactionsPage.java</file>
-            <file>file:/C:/Users/Hey/OneDrive/Documents/NetBeansProjects/Amavubi%20Fan%20hub/src/View/AddFanDialog.java</file>
-            <file>file:/C:/Users/Hey/OneDrive/Documents/NetBeansProjects/Amavubi%20Fan%20hub/src/Dao/TransactionDAO.java</file>
+            <file>file:/C:/Users/Hey/OneDrive/Documents/NetBeansProjects/Amavubi%20Fan%20hub/src/Service/OTPService.java</file>
+            <file>file:/C:/Users/Hey/OneDrive/Documents/NetBeansProjects/Amavubi%20Fan%20hub/src/hibernate.cfg.xml</file>
+            <file>file:/C:/Users/Hey/OneDrive/Documents/NetBeansProjects/Amavubi%20Fan%20hub/src/Util/ExportUtil.java</file>
+            <file>file:/C:/Users/Hey/OneDrive/Documents/NetBeansProjects/Amavubi%20Fan%20hub/src/Service/IFanService.java</file>
             <file>file:/C:/Users/Hey/OneDrive/Documents/NetBeansProjects/Amavubi%20Fan%20hub/src/View/LoginPage.java</file>
-            <file>file:/C:/Users/Hey/OneDrive/Documents/NetBeansProjects/Amavubi%20Fan%20hub/src/View/MerchandisePage.java</file>
+            <file>file:/C:/Users/Hey/OneDrive/Documents/NetBeansProjects/Amavubi%20Fan%20hub/src/Model/Fan.java</file>
             <file>file:/C:/Users/Hey/OneDrive/Documents/NetBeansProjects/Amavubi%20Fan%20hub/src/View/FundraisingPage.java</file>
-            <file>file:/C:/Users/Hey/OneDrive/Documents/NetBeansProjects/Amavubi%20Fan%20hub/src/View/PlayerStatisticsPage.java</file>
+            <file>file:/C:/Users/Hey/OneDrive/Documents/NetBeansProjects/Amavubi%20Fan%20hub/src/controller/RMIServer.java</file>
         </group>
     </open-files>
 </project-private>

@@ -1,0 +1,7 @@
+view.PlayerStatisticsPage$GradientPanel
+view.PlayerStatisticsPage$4
+view.PlayerStatisticsPage$ImageRenderer
+view.PlayerStatisticsPage$2
+view.PlayerStatisticsPage$3
+view.PlayerStatisticsPage$1
+view.PlayerStatisticsPage

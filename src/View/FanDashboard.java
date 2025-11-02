@@ -50,12 +50,19 @@ class GradientPanel extends JPanel {
     /**
      * Creates new form FanDashboard
      */
-      public FanDashboard(Fan fan) {
+    public FanDashboard(Fan fan) {
         this.fan = fan;
         initComponents();
-         setLocationRelativeTo(null);
+        setLocationRelativeTo(null);
         welcomeLabel.setText("Welcome, " + fan.getName());
         tierLabel.setText(fan.getTier() + " Member");
+        
+        // Set window title based on role
+        if ("Admin".equalsIgnoreCase(fan.getRole())) {
+            setTitle("FanHub - Admin Dashboard");
+        } else {
+            setTitle("FanHub - Fan Dashboard");
+        }
     }
     /**
      * This method is called from within the constructor to initialize the form.

@@ -1,0 +1,10 @@
+view.AddFanDialog$1
+view.AddFanDialog$2
+view.AddFanDialog$3
+view.AddFanDialog$4
+view.AddFanDialog$8$1
+view.AddFanDialog$5
+view.AddFanDialog$6
+view.AddFanDialog$7
+view.AddFanDialog$8
+view.AddFanDialog

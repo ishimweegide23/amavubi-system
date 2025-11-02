@@ -1,79 +1,67 @@
 package Dao;
 
 import Model.Fan;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import Model.Transaction;
+import Util.HibernateUtil;
+import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
+import org.hibernate.Query;
+import org.hibernate.Session;
 
 public class FanDAO {
+    private Connection connection;
+
+    public FanDAO() {
+        this.connection = DatabaseConnection.getConnection();
+    }
 
     // CREATE: Register a new fan
-   public boolean registerFan(Fan fan) {
-    String query = "INSERT INTO fans (national_id, name, phone, email, password, tier, role) VALUES (?, ?, ?, ?, ?, ?, ?)";
-    try (Connection conn = DatabaseConnection.getConnection();
-         PreparedStatement pstmt = conn.prepareStatement(query)) {
-
-        pstmt.setString(1, fan.getNationalId());
-        pstmt.setString(2, fan.getName());
-        pstmt.setString(3, fan.getPhone());
-        pstmt.setString(4, fan.getEmail());
-        pstmt.setString(5, fan.getPassword());
-        
-        String tier = fan.getTier();
-        if (tier == null || tier.trim().isEmpty()) {
-            tier = "STANDARD"; // default fallback
+   // Register a new fan with OTP
+     public boolean registerFan(Fan fan) {
+        Session session = HibernateUtil.getSessionFactory().openSession();
+        Transaction transaction = null;
+        try {
+            transaction = (Transaction) session.beginTransaction();
+            session.save(fan);
+            transaction.commit();
+            return true;
+        } catch (Exception e) {
+            if (transaction != null) transaction.rollback();
+            e.printStackTrace();
+            return false;
+        } finally {
+            session.close();
         }
-        pstmt.setString(6, tier);
-        
-        String role = fan.getRole();
-        if (role == null || role.trim().isEmpty()) {
-            role = "Fan"; // default role
-        }
-        pstmt.setString(7, role);
-
-        int affectedRows = pstmt.executeUpdate();
-        return affectedRows > 0;
-    } catch (SQLException e) {
-        e.printStackTrace();
-        return false;
     }
-}
+
 
    // READ: Authenticate a fan by email and password
-public Fan authenticateFan(String email, String password) {
-    String query = "SELECT * FROM fans WHERE email = ? AND password = ?";
-    try (Connection conn = DatabaseConnection.getConnection();
-         PreparedStatement pstmt = conn.prepareStatement(query)) {
-
-        pstmt.setString(1, email);
-        pstmt.setString(2, password);
-
-        try (ResultSet rs = pstmt.executeQuery()) {
-            if (rs.next()) {
-                // Create Fan object using available constructor
-                Fan fan = new Fan(
-                    rs.getInt("fan_id"),
-                    rs.getString("national_id"),
-                    rs.getString("name"),
-                    rs.getString("phone"),
-                    rs.getString("email"),
-                    rs.getString("password"),
-                    rs.getString("tier")
-                );
-
-                // ✅ Set role separately since it's not in constructor
-                fan.setRole(rs.getString("role"));
-                return fan;
-            }
+ public Fan authenticateFan(String email, String password) {
+        Session session = HibernateUtil.getSessionFactory().openSession();
+        try {
+            Query query = session.createQuery("FROM Fan WHERE email = :email AND password = :password");
+            query.setParameter("email", email);
+            query.setParameter("password", password);
+            return (Fan) query.uniqueResult();
+        } finally {
+            session.close();
         }
-    } catch (SQLException e) {
-        e.printStackTrace();
     }
-    return null;
-}
+   public String generateAndStoreOTP(String email) {
+        String otp = String.format("%06d", new Random().nextInt(999999));
+        String query = "UPDATE fans SET otp = ? WHERE email = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(query)) {
+            pstmt.setString(1, otp);
+            pstmt.setString(2, email);
+            pstmt.executeUpdate();
+            return otp;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
 
 
     // Check if a national ID is already registered
@@ -212,47 +200,35 @@ public Fan authenticateFan(String email, String password) {
 
    // Add this method to FanDAO.java:
 public List<Fan> searchFans(String searchTerm) {
-    List<Fan> fans = new ArrayList<>();
-    String query = "SELECT * FROM fans WHERE " +
-                 "fan_id LIKE ? OR " +
-                 "national_id LIKE ? OR " +
-                 "name LIKE ? OR " +
-                 "email LIKE ? OR " +
-                 "phone LIKE ? OR " +
-                 "tier LIKE ? OR " +
-                 "role LIKE ?";
-    
-    try (Connection conn = DatabaseConnection.getConnection();
-         PreparedStatement pstmt = conn.prepareStatement(query)) {
+        List<Fan> fans = new ArrayList<>();
+        String query = "SELECT * FROM fans WHERE fan_id LIKE ? OR national_id LIKE ? OR name LIKE ? OR email LIKE ? OR phone LIKE ? OR tier LIKE ? OR role LIKE ?";
         
-        String likeTerm = "%" + searchTerm + "%";
-        pstmt.setString(1, likeTerm);
-        pstmt.setString(2, likeTerm);
-        pstmt.setString(3, likeTerm);
-        pstmt.setString(4, likeTerm);
-        pstmt.setString(5, likeTerm);
-        pstmt.setString(6, likeTerm);
-        pstmt.setString(7, likeTerm);
-        
-        try (ResultSet rs = pstmt.executeQuery()) {
-            while (rs.next()) {
-                Fan fan = new Fan();
-                fan.setFanId(rs.getInt("fan_id"));
-                fan.setNationalId(rs.getString("national_id"));
-                fan.setName(rs.getString("name"));
-                fan.setPhone(rs.getString("phone"));
-                fan.setEmail(rs.getString("email"));
-                fan.setPassword(rs.getString("password"));
-                fan.setTier(rs.getString("tier"));
-                fan.setRole(rs.getString("role"));
-                fans.add(fan);
+        try (PreparedStatement pstmt = connection.prepareStatement(query)) {
+            String likeTerm = "%" + searchTerm + "%";
+            for (int i = 1; i <= 7; i++) {
+                pstmt.setString(i, likeTerm);
             }
+            
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    Fan fan = new Fan();
+                    fan.setFanId(rs.getInt("fan_id"));
+                    fan.setNationalId(rs.getString("national_id"));
+                    fan.setName(rs.getString("name"));
+                    fan.setPhone(rs.getString("phone"));
+                    fan.setEmail(rs.getString("email"));
+                    fan.setPassword(rs.getString("password"));
+                    fan.setTier(rs.getString("tier"));
+                    fan.setRole(rs.getString("role"));
+                    fans.add(fan);
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
-    } catch (SQLException e) {
-        e.printStackTrace();
+        return fans;
     }
-    return fans;
-}
+
    
    
 }

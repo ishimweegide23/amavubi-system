@@ -4,7 +4,8 @@
  * and open the template in the editor.
  */
 package view;
-
+import controller.FanController;
+import Service.FanService;
 import Dao.FanDAO;
 import Model.Fan;
 import javax.swing.*;
@@ -33,15 +34,16 @@ class GradientPanel extends JPanel {
         g2d.fillRect(0, 0, getWidth(), getHeight());
     }
 }
-public class RegistrationPage extends javax.swing.JFrame {
 
-    /**
-     * Creates new form RegistrationPage
-     */
+
+public class RegistrationPage extends javax.swing.JFrame {
+    private final FanController fanController;
+    private String generatedOTP;
+
     public RegistrationPage() {
+        this.fanController = new FanController();
         initComponents();
-        
-        
+        setLocationRelativeTo(null);
     }
 
   
@@ -207,8 +209,9 @@ public class RegistrationPage extends javax.swing.JFrame {
                 .addContainerGap()
                 .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
                     .addGroup(jPanel1Layout.createSequentialGroup()
+                        .addGap(0, 0, Short.MAX_VALUE)
                         .addComponent(jLabel10)
-                        .addGap(18, 31, Short.MAX_VALUE)
+                        .addGap(18, 18, 18)
                         .addComponent(backButton)
                         .addGap(24, 24, 24))
                     .addGroup(javax.swing.GroupLayout.Alignment.LEADING, jPanel1Layout.createSequentialGroup()
@@ -233,7 +236,7 @@ public class RegistrationPage extends javax.swing.JFrame {
             .addGroup(jPanel1Layout.createSequentialGroup()
                 .addGap(48, 48, 48)
                 .addComponent(registerButton, javax.swing.GroupLayout.PREFERRED_SIZE, 218, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .addContainerGap(57, Short.MAX_VALUE))
         );
         jPanel1Layout.setVerticalGroup(
             jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -278,34 +281,32 @@ public class RegistrationPage extends javax.swing.JFrame {
         mainpanel.setLayout(mainpanelLayout);
         mainpanelLayout.setHorizontalGroup(
             mainpanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, mainpanelLayout.createSequentialGroup()
+                .addComponent(jLabel11)
+                .addGap(52, 52, 52))
             .addGroup(mainpanelLayout.createSequentialGroup()
                 .addGroup(mainpanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(mainpanelLayout.createSequentialGroup()
-                        .addGap(114, 114, 114)
-                        .addGroup(mainpanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addComponent(jLabel1)
-                            .addGroup(mainpanelLayout.createSequentialGroup()
-                                .addGap(10, 10, 10)
-                                .addGroup(mainpanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                                    .addGroup(mainpanelLayout.createSequentialGroup()
-                                        .addGap(10, 10, 10)
-                                        .addComponent(jLabel3))
-                                    .addComponent(jLabel2, javax.swing.GroupLayout.PREFERRED_SIZE, 184, javax.swing.GroupLayout.PREFERRED_SIZE)))))
-                    .addGroup(mainpanelLayout.createSequentialGroup()
-                        .addGap(62, 62, 62)
+                        .addContainerGap()
                         .addComponent(jPanel1, javax.swing.GroupLayout.PREFERRED_SIZE, 325, javax.swing.GroupLayout.PREFERRED_SIZE))
                     .addGroup(mainpanelLayout.createSequentialGroup()
-                        .addGap(95, 95, 95)
-                        .addComponent(jLabel11)))
-                .addContainerGap())
+                        .addGap(64, 64, 64)
+                        .addComponent(jLabel3))
+                    .addGroup(mainpanelLayout.createSequentialGroup()
+                        .addGap(53, 53, 53)
+                        .addGroup(mainpanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addComponent(jLabel1)
+                            .addComponent(jLabel2, javax.swing.GroupLayout.PREFERRED_SIZE, 184, javax.swing.GroupLayout.PREFERRED_SIZE))))
+                .addGap(24, 24, 24))
         );
         mainpanelLayout.setVerticalGroup(
             mainpanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(mainpanelLayout.createSequentialGroup()
+                .addContainerGap()
                 .addComponent(jLabel1)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(jLabel2, javax.swing.GroupLayout.PREFERRED_SIZE, 21, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addGap(1, 1, 1)
                 .addComponent(jLabel3)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                 .addComponent(jPanel1, javax.swing.GroupLayout.PREFERRED_SIZE, 478, javax.swing.GroupLayout.PREFERRED_SIZE)
@@ -322,27 +323,32 @@ public class RegistrationPage extends javax.swing.JFrame {
 
     private void nationalIdFieldActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_nationalIdFieldActionPerformed
         // TODO add your handling code here:
-     String nationalId = nationalIdField.getText().trim();
-    
-    if (nationalId.isEmpty()) {
-        showError("National ID cannot be empty", nationalIdField);
-    } 
-    else if (!nationalId.matches("^\\d{16}$")) {  // Exactly 16 digits
-        showError("National ID must be exactly 16 numeric digits", nationalIdField);
-    }
-    else {
-        setValidBorder(nationalIdField);
-    }
+Fan newFan = new Fan(
+    0,
+    nationalIdField.getText(),
+    nameField.getText(),
+    phoneField.getText(),
+    emailField.getText(),
+    new String(passwordField.getPassword()),
+    (String) jComboBox1.getSelectedItem()
+);
+
+if (new FanDAO().registerFan(newFan)) {
+    JOptionPane.showMessageDialog(this, "Registration Success!");
+    new LoginPage().setVisible(true);
+    this.dispose();
+}
 }  
 
 // Helper methods (add these in your class)
-private void showError(String message, JTextField field) {
-    JOptionPane.showMessageDialog(this, message, 
-        "Validation Error", JOptionPane.ERROR_MESSAGE);
-    field.setBorder(BorderFactory.createCompoundBorder(
-        BorderFactory.createEmptyBorder(8, 0, 8, 0),
-        BorderFactory.createMatteBorder(0, 0, 2, 0, Color.RED)));
-}
+    private void showError(String message, JComponent field) {
+        JOptionPane.showMessageDialog(this, message, "Validation Error", JOptionPane.ERROR_MESSAGE);
+        if (field instanceof JTextField) {
+            ((JTextField)field).setBorder(BorderFactory.createLineBorder(Color.RED));
+        } else if (field instanceof JPasswordField) {
+            ((JPasswordField)field).setBorder(BorderFactory.createLineBorder(Color.RED));
+        }
+    }
 
 private void setValidBorder(JTextField field) {
     field.setBorder(BorderFactory.createCompoundBorder(
@@ -456,44 +462,53 @@ private void setValidBorder(JTextField field) {
     private void registerButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_registerButtonActionPerformed
         // TODO add your handling code here:
         // Trigger validation for all fields
-    nationalIdFieldActionPerformed(evt);
-    nameFieldActionPerformed(evt);
-    phoneFieldActionPerformed(evt);
-    emailFieldActionPerformed(evt);
-    passwordFieldActionPerformed(evt);
-    
-    // Check if all fields are valid
-    if (isFormValid()) {
-        Fan fan = new Fan(
+   // Validate all fields first
+     if (!validateAllFields()) {
+            return;
+        }
+
+        // Generate and send OTP
+        generatedOTP = fanController.generateOTP(emailField.getText().trim());
+        if (generatedOTP == null) {
+            JOptionPane.showMessageDialog(this, "Failed to generate OTP", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        // Show OTP input dialog
+        String inputOTP = JOptionPane.showInputDialog(this, 
+            "Enter the 6-digit OTP sent to your email", 
+            "OTP Verification", 
+            JOptionPane.PLAIN_MESSAGE);
+
+        if (inputOTP == null || inputOTP.trim().isEmpty()) {
+            return; // User cancelled
+        }
+
+        // Verify OTP
+        if (!fanController.verifyOTP(emailField.getText().trim(), inputOTP)) {
+            JOptionPane.showMessageDialog(this, "Invalid OTP", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        // Create and register fan
+        Fan newFan = new Fan(
             0, // ID will be auto-generated
             nationalIdField.getText().trim(),
             nameField.getText().trim(),
             phoneField.getText().trim(),
             emailField.getText().trim(),
-            String.valueOf(passwordField.getPassword()).trim(),
+            new String(passwordField.getPassword()),
             (String) jComboBox1.getSelectedItem()
         );
-        
-        if (new FanDAO().registerFan(fan)) {
-            JOptionPane.showMessageDialog(this, 
-                "Registration successful!\nWelcome " + fan.getName(),
-                "Success", JOptionPane.INFORMATION_MESSAGE);
-            new FanDashboard(fan).setVisible(true);
+
+        if (fanController.registerFan(newFan, generatedOTP)) {
+            JOptionPane.showMessageDialog(this, "Registration successful!");
+            new LoginPage().setVisible(true);
             this.dispose();
         } else {
-            JOptionPane.showMessageDialog(this,
-                "Registration failed. Please try again.",
-                "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Registration failed. Email or National ID may already exist.");
         }
-    }
-}
-
-private boolean isFormValid() {
-    return !nationalIdField.getText().trim().isEmpty()
-        && !nameField.getText().trim().isEmpty()
-        && phoneField.getText().trim().matches("^\\d{10}$")
-        && emailField.getText().trim().matches("^[\\w-.]+@([\\w-]+\\.)+[\\w-]{2,4}$")
-        && String.valueOf(passwordField.getPassword()).trim().length() >= 6;
+    
     }//GEN-LAST:event_registerButtonActionPerformed
 
     private void backButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_backButtonActionPerformed
@@ -560,4 +575,51 @@ private boolean isFormValid() {
     private javax.swing.JTextField phoneField;
     private javax.swing.JButton registerButton;
     // End of variables declaration//GEN-END:variables
+
+private boolean validateAllFields() {
+        boolean valid = true;
+        
+        // National ID validation
+        if (nationalIdField.getText().trim().isEmpty()) {
+            showError("National ID cannot be empty", nationalIdField);
+            valid = false;
+        }
+
+        // Name validation
+        String name = nameField.getText().trim();
+        String[] forbiddenWords = {"rwanda", "kigali", "burundi", "uganda"}; // Add more as needed
+        if (name.isEmpty()) {
+            showError("Name cannot be empty", nameField);
+            valid = false;
+        } else if (Arrays.stream(forbiddenWords).anyMatch(name.toLowerCase()::contains)) {
+            showError("Name contains invalid words", nameField);
+            valid = false;
+        }
+
+        // Phone validation
+        String phone = phoneField.getText().trim();
+        if (!phone.matches("^\\d{10}$")) {
+            showError("Phone must be 10 digits", phoneField);
+            valid = false;
+        }
+
+        // Email validation
+        String email = emailField.getText().trim();
+        if (!email.matches("^[\\w-.]+@([\\w-]+\\.)+[\\w-]{2,4}$")) {
+            showError("Invalid email format", emailField);
+            valid = false;
+        } else if (fanController.isEmailRegistered(email)) {
+            showError("Email already registered", emailField);
+            valid = false;
+        }
+
+        // Password validation
+        String password = new String(passwordField.getPassword());
+        if (password.length() < 6) {
+            showError("Password must be at least 6 characters", passwordField);
+            valid = false;
+        }
+
+        return valid;
+    }
 }
